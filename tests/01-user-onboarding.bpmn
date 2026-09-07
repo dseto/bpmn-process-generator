@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_UserOnboarding" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_UserOnboarding" name="User Onboarding" isExecutable="false">
+    <bpmn:startEvent id="Start_RegistrationInitiated" name="Registration initiated">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Task_ValidateRegistration" name="Validate registration data">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_SetPasswordAndPreferences" name="Set password and preferences">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_SendWelcomeEmail" name="Send welcome email and activate">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_OnboardingCompleted" name="Onboarding completed">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_RegistrationInitiated" targetRef="Task_ValidateRegistration" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_ValidateRegistration" targetRef="Task_SetPasswordAndPreferences" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_SetPasswordAndPreferences" targetRef="Task_SendWelcomeEmail" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_SendWelcomeEmail" targetRef="End_OnboardingCompleted" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_UserOnboarding">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_UserOnboarding" bpmnElement="Process_UserOnboarding">
+      <bpmndi:BPMNShape id="Start_RegistrationInitiated_di" bpmnElement="Start_RegistrationInitiated">
+        <omgdc:Bounds x="160" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SetPasswordAndPreferences_di" bpmnElement="Task_SetPasswordAndPreferences">
+        <omgdc:Bounds x="460" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SendWelcomeEmail_di" bpmnElement="Task_SendWelcomeEmail">
+        <omgdc:Bounds x="610" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_OnboardingCompleted_di" bpmnElement="End_OnboardingCompleted">
+        <omgdc:Bounds x="760" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ValidateRegistration_di" bpmnElement="Task_ValidateRegistration">
+        <omgdc:Bounds x="310" y="-20" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <omgdi:waypoint x="196" y="120" />
+        <omgdi:waypoint x="253" y="120" />
+        <omgdi:waypoint x="253" y="20" />
+        <omgdi:waypoint x="310" y="20" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <omgdi:waypoint x="410" y="20" />
+        <omgdi:waypoint x="435" y="20" />
+        <omgdi:waypoint x="435" y="120" />
+        <omgdi:waypoint x="460" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <omgdi:waypoint x="560" y="120" />
+        <omgdi:waypoint x="610" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <omgdi:waypoint x="710" y="120" />
+        <omgdi:waypoint x="760" y="120" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

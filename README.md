@@ -16,6 +16,14 @@ Projetado como uma **Agent Skill** para assistentes de IA (Claude Code, Antigrav
   2. *Controle de Fluxo*: Checagem de nós inalcançáveis (*unreachable*), becos sem saída (*dead ends*), duplicidade de identificadores, integridade de referências e balanceamento de bifurcações paralelas.
 * **Editor Web Centralizado (`editor.html`)**:
   * Aplicação web embarcada baseada em [bpmn-js@17.0.0](https://bpmn.io/toolkit/bpmn-js/).
+  * **Redimensionamento de Tarefas**: Alças nos 4 cantos de qualquer tarefa (*UserTask*, *ServiceTask*, etc.) com controle de dimensão mínima de segurança (80×60 px).
+  * **Curvas e Trajetórias em 90°**: Botão de rota ortogonal rápida (`📐 Curva 90°`) para converter conexões retas/diagonais em ângulos retos perfeitos de 90° (Manhattan routing), aplicável a conexões selecionadas ou ao diagrama completo.
+  * **Alinhamento Magnético (Grid Snapping)**: Encaixe automático em grade de 10 px para alinhamento preciso de nós e linhas.
+  * **Histórico Visual e Atalhos**: Botões de Desfazer (`Ctrl+Z`) e Refazer (`Ctrl+Y`), com controle de estado do `commandStack`.
+  * **Paleta de Cores Integrada**: Atribuição rápida de cores de destaque (*fill* e *stroke*) em tarefas, eventos e raias compatíveis com o padrão BPMNDI.
+  * **Busca no Diagrama**: Ferramenta de localização de nós e fluxos integrada (`Ctrl+F`).
+  * **Controles de Zoom e Enquadramento**: Zoom in, Zoom out, reset 100% (1:1) e enquadramento automático à janela (*fit-viewport*).
+  * **Exportação Gráfica (SVG e PNG 2x)**: Download imediato do diagrama em vetor SVG e em imagem rasterizada de alta resolução PNG.
   * **Salvamento Direto no Disco**: Utiliza a *File System Access API* no Chrome e Edge para gravar alterações diretamente no arquivo aberto (`Ctrl+S`), sem necessidade de download manual.
   * **Drag & Drop**: Arraste qualquer arquivo `.bpmn` ou `.xml` para a janela do navegador para visualizá-lo e editá-lo instantaneamente.
   * **Exemplos Integrados (*Presets*)**: Seletor com diagramas pré-carregados que funcionam 100% offline e sem restrições de CORS via protocolo `file://`.
@@ -68,8 +76,13 @@ cd bpmn-process-generator
 2. Utilize as opções da barra superior:
    * **📂 Abrir .bpmn (`Ctrl+O`)**: Escolha um arquivo do seu computador.
    * **Drag & Drop**: Arraste um arquivo `.bpmn` para dentro do canvas.
-   * **Seletor de Exemplos**: Escolha um dos diagramas prontos no menu suspenso.
-3. Edite elementos arrastando, renomeando ou adicionando novas etapas.
+3. Edite elementos com total liberdade gráfica:
+   * **Redimensionamento**: Clique em qualquer tarefa e puxe uma das 4 alças nos cantos para ajustar sua largura e altura.
+   * **Curvas em 90°**: Selecione conexões diagonais e clique em **"📐 Curva 90°"** para recalculá-las em rota ortogonal com cantos retos (ou clique sem seleção para alinhar todas).
+   * **Grade Magnética**: Mova caixas ou arraste os pontos médios das linhas (*bendpoints*) com travamento automático na grade de 10 px.
+   * **Paleta de Cores**: Selecione caixas ou fluxos e clique numa das opções de cores para destacá-los visualmente.
+   * **Histórico e Busca**: Use **`Ctrl+Z`** (desfazer), **`Ctrl+Y`** (refazer) e **`Ctrl+F`** (busca no processo).
+   * **Exportação Gráfica**: Baixe cópias prontas para relatórios clicando em **"🖼️ SVG"** ou **"📷 PNG"**.
 4. Pressione **`Ctrl+S`** ou clique em **"💾 Salvar"** para regravar as alterações diretamente no arquivo no disco.
 
 ---
@@ -99,6 +112,16 @@ python scripts/build_editor.py meu-processo.bpmn -o meu-processo.html -s meu-pro
 Reconstrói o `editor.html` atualizando a lista de presets embutidos:
 ```bash
 python scripts/generate_editor_html.py
+```
+
+#### Executar a Suíte de Testes:
+Executa a validação completa de todos os diagramas BPMN de teste e utilitários via pytest ou script:
+```bash
+# Executar suíte pytest
+pytest -v
+
+# Ou executar o verificador direto
+python scripts/verify_tests.py
 ```
 
 ---

@@ -1,0 +1,313 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_BusBoarding" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_BusBoarding" name="Fluxo de Embarque e Viagem de Ônibus" isExecutable="false">
+    
+    <bpmn:laneSet id="LaneSet_BusTrip">
+      <bpmn:lane id="Lane_Passenger" name="Passageiro">
+        <bpmn:flowNodeRef>Start_PassengerAtStop</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SignalBus</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_BoardBus</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_PaymentMethod</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_TapSmartCard</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_FallbackCash</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_PayWithCash</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_PassTurnstile</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_SeatAvailable</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SitInSeat</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_TravelStanding</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_MergePosture</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_PressStopButton</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_DisembarkBus</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_TripCompleted</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_MissedBusFull</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_LeftNoFunds</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_Driver" name="Motorista">
+        <bpmn:flowNodeRef>Task_CheckCapacity</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_IsBusFull</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_BypassStop</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ParkAtStop</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ResumeRoute</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_StopAtDestination</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_FareCollector" name="Cobrador">
+        <bpmn:flowNodeRef>Task_ReceiveCash</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_HasChange</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CalculateAndReturnChange</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_UnableToGiveChange</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AuthorizeTurnstileManual</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_BusSystem" name="Sistema do Ônibus">
+        <bpmn:flowNodeRef>Task_OpenFrontDoors</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ValidateCardBalance</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_CardBalanceCheck</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_DeductFare</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AlertInsufficientBalance</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_UnlockTurnstile</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CloseDoors</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_TriggerStopIndicator</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_OpenRearDoors</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    
+    <bpmn:startEvent id="Start_PassengerAtStop" name="Passageiro aguarda no ponto">
+      <bpmn:outgoing>Flow_StartToSignal</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Task_SignalBus" name="Dar sinal de parada para o ônibus">
+      <bpmn:incoming>Flow_StartToSignal</bpmn:incoming>
+      <bpmn:outgoing>Flow_SignalToCheck</bpmn:outgoing>
+    </bpmn:userTask>
+
+    
+    <bpmn:userTask id="Task_CheckCapacity" name="Avaliar capacidade e lotação do veículo">
+      <bpmn:incoming>Flow_SignalToCheck</bpmn:incoming>
+      <bpmn:outgoing>Flow_CheckToFullGateway</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_IsBusFull" name="Ônibus com lotação máxima?">
+      <bpmn:incoming>Flow_CheckToFullGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_BusFullYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_BusFullNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_BypassStop" name="Sinalizar lotação e seguir viagem sem parar">
+      <bpmn:incoming>Flow_BusFullYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_BypassToEnd</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_MissedBusFull" name="Passageiro aguarda o próximo ônibus">
+      <bpmn:incoming>Flow_BypassToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Task_ParkAtStop" name="Desacelerar e encostar o ônibus no ponto">
+      <bpmn:incoming>Flow_BusFullNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_ParkToOpenDoors</bpmn:outgoing>
+    </bpmn:userTask>
+
+    
+    <bpmn:serviceTask id="Task_OpenFrontDoors" name="Abrir portas dianteiras de embarque">
+      <bpmn:incoming>Flow_ParkToOpenDoors</bpmn:incoming>
+      <bpmn:outgoing>Flow_DoorsToBoard</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_BoardBus" name="Subir os degraus e entrar no ônibus">
+      <bpmn:incoming>Flow_DoorsToBoard</bpmn:incoming>
+      <bpmn:outgoing>Flow_BoardToPayGateway</bpmn:outgoing>
+    </bpmn:userTask>
+
+    
+    <bpmn:exclusiveGateway id="Gateway_PaymentMethod" name="Qual a forma de pagamento?">
+      <bpmn:incoming>Flow_BoardToPayGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_PayByCard</bpmn:outgoing>
+      <bpmn:outgoing>Flow_PayByCash</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    
+    <bpmn:userTask id="Task_TapSmartCard" name="Aproximar cartão de transporte no validador">
+      <bpmn:incoming>Flow_PayByCard</bpmn:incoming>
+      <bpmn:outgoing>Flow_TapToValidate</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_ValidateCardBalance" name="Ler chip e verificar saldo disponível">
+      <bpmn:incoming>Flow_TapToValidate</bpmn:incoming>
+      <bpmn:outgoing>Flow_ValidateToBalanceGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_CardBalanceCheck" name="Saldo é suficiente?">
+      <bpmn:incoming>Flow_ValidateToBalanceGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_BalanceSufficient</bpmn:outgoing>
+      <bpmn:outgoing>Flow_BalanceInsufficient</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="Task_DeductFare" name="Debitar tarifa e registrar integração">
+      <bpmn:incoming>Flow_BalanceSufficient</bpmn:incoming>
+      <bpmn:outgoing>Flow_DeductToUnlock</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:serviceTask id="Task_AlertInsufficientBalance" name="Emitir sinal sonoro de saldo insuficiente">
+      <bpmn:incoming>Flow_BalanceInsufficient</bpmn:incoming>
+      <bpmn:outgoing>Flow_AlertToFallback</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_FallbackCash" name="Passageiro tem dinheiro em espécie?">
+      <bpmn:incoming>Flow_AlertToFallback</bpmn:incoming>
+      <bpmn:outgoing>Flow_HasFallbackCash</bpmn:outgoing>
+      <bpmn:outgoing>Flow_NoFallbackCash</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    
+    <bpmn:userTask id="Task_PayWithCash" name="Entregar notas/moedas ao cobrador">
+      <bpmn:incoming>Flow_PayByCash</bpmn:incoming>
+      <bpmn:incoming>Flow_HasFallbackCash</bpmn:incoming>
+      <bpmn:outgoing>Flow_PayToReceiveCash</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_ReceiveCash" name="Conferir valor da tarifa recebida">
+      <bpmn:incoming>Flow_PayToReceiveCash</bpmn:incoming>
+      <bpmn:outgoing>Flow_ReceiveToChangeGateway</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_HasChange" name="Valor exato ou cobrador tem troco?">
+      <bpmn:incoming>Flow_ReceiveToChangeGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_ChangeAvailable</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ChangeUnavailable</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_CalculateAndReturnChange" name="Calcular troco e devolver ao passageiro">
+      <bpmn:incoming>Flow_ChangeAvailable</bpmn:incoming>
+      <bpmn:outgoing>Flow_ChangeToAuthorize</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_AuthorizeTurnstileManual" name="Pressionar botão de liberação da catraca">
+      <bpmn:incoming>Flow_ChangeToAuthorize</bpmn:incoming>
+      <bpmn:outgoing>Flow_AuthorizeToUnlock</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_UnableToGiveChange" name="Informar impossibilidade de troco e solicitar desembarque">
+      <bpmn:incoming>Flow_ChangeUnavailable</bpmn:incoming>
+      <bpmn:outgoing>Flow_NoChangeToEnd</bpmn:outgoing>
+    </bpmn:userTask>
+
+    
+    <bpmn:endEvent id="End_LeftNoFunds" name="Passageiro desembarca sem pagar tarifa">
+      <bpmn:incoming>Flow_NoFallbackCash</bpmn:incoming>
+      <bpmn:incoming>Flow_NoChangeToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    
+    <bpmn:serviceTask id="Task_UnlockTurnstile" name="Destravar catraca do ônibus">
+      <bpmn:incoming>Flow_DeductToUnlock</bpmn:incoming>
+      <bpmn:incoming>Flow_AuthorizeToUnlock</bpmn:incoming>
+      <bpmn:outgoing>Flow_UnlockToPass</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_PassTurnstile" name="Girar a catraca e acessar o salão de passageiros">
+      <bpmn:incoming>Flow_UnlockToPass</bpmn:incoming>
+      <bpmn:outgoing>Flow_PassToCloseDoors</bpmn:outgoing>
+    </bpmn:userTask>
+
+    
+    <bpmn:serviceTask id="Task_CloseDoors" name="Fechar portas dianteiras">
+      <bpmn:incoming>Flow_PassToCloseDoors</bpmn:incoming>
+      <bpmn:outgoing>Flow_DoorsToResume</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_ResumeRoute" name="Retomar viagem e acelerar no trânsito">
+      <bpmn:incoming>Flow_DoorsToResume</bpmn:incoming>
+      <bpmn:outgoing>Flow_ResumeToSeatCheck</bpmn:outgoing>
+    </bpmn:userTask>
+
+    
+    <bpmn:exclusiveGateway id="Gateway_SeatAvailable" name="Há assento livre no veículo?">
+      <bpmn:incoming>Flow_ResumeToSeatCheck</bpmn:incoming>
+      <bpmn:outgoing>Flow_SeatFreeYes</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SeatFreeNo</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_SitInSeat" name="Acomodar-se no assento vago">
+      <bpmn:incoming>Flow_SeatFreeYes</bpmn:incoming>
+      <bpmn:outgoing>Flow_SitToMerge</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_TravelStanding" name="Permanecer em pé segurando firme no balaústre">
+      <bpmn:incoming>Flow_SeatFreeNo</bpmn:incoming>
+      <bpmn:outgoing>Flow_StandToMerge</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_MergePosture" name="Sincronização de trajeto">
+      <bpmn:incoming>Flow_SitToMerge</bpmn:incoming>
+      <bpmn:incoming>Flow_StandToMerge</bpmn:incoming>
+      <bpmn:outgoing>Flow_MergeToPressButton</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    
+    <bpmn:userTask id="Task_PressStopButton" name="Pressionar botão de sinal de parada antes do ponto">
+      <bpmn:incoming>Flow_MergeToPressButton</bpmn:incoming>
+      <bpmn:outgoing>Flow_ButtonToTrigger</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_TriggerStopIndicator" name="Acionar campainha e acender luminoso Parada Solicitada">
+      <bpmn:incoming>Flow_ButtonToTrigger</bpmn:incoming>
+      <bpmn:outgoing>Flow_TriggerToStop</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_StopAtDestination" name="Parar no ponto de destino e acionar freio">
+      <bpmn:incoming>Flow_TriggerToStop</bpmn:incoming>
+      <bpmn:outgoing>Flow_StopToOpenRear</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_OpenRearDoors" name="Abrir portas traseiras de desembarque">
+      <bpmn:incoming>Flow_StopToOpenRear</bpmn:incoming>
+      <bpmn:outgoing>Flow_OpenRearToDisembark</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_DisembarkBus" name="Descer pela porta traseira com segurança">
+      <bpmn:incoming>Flow_OpenRearToDisembark</bpmn:incoming>
+      <bpmn:outgoing>Flow_DisembarkToEnd</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_TripCompleted" name="Viagem concluída no destino com sucesso">
+      <bpmn:incoming>Flow_DisembarkToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    
+    <bpmn:sequenceFlow id="Flow_StartToSignal" sourceRef="Start_PassengerAtStop" targetRef="Task_SignalBus" />
+    <bpmn:sequenceFlow id="Flow_SignalToCheck" sourceRef="Task_SignalBus" targetRef="Task_CheckCapacity" />
+    <bpmn:sequenceFlow id="Flow_CheckToFullGateway" sourceRef="Task_CheckCapacity" targetRef="Gateway_IsBusFull" />
+    
+    <bpmn:sequenceFlow id="Flow_BusFullYes" name="Sim (Lotado)" sourceRef="Gateway_IsBusFull" targetRef="Task_BypassStop">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${isFull == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_BypassToEnd" sourceRef="Task_BypassStop" targetRef="End_MissedBusFull" />
+    
+    <bpmn:sequenceFlow id="Flow_BusFullNo" name="Não (Há vagas)" sourceRef="Gateway_IsBusFull" targetRef="Task_ParkAtStop">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${isFull == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ParkToOpenDoors" sourceRef="Task_ParkAtStop" targetRef="Task_OpenFrontDoors" />
+    <bpmn:sequenceFlow id="Flow_DoorsToBoard" sourceRef="Task_OpenFrontDoors" targetRef="Task_BoardBus" />
+    <bpmn:sequenceFlow id="Flow_BoardToPayGateway" sourceRef="Task_BoardBus" targetRef="Gateway_PaymentMethod" />
+
+    <bpmn:sequenceFlow id="Flow_PayByCard" name="Cartão Eletrônico" sourceRef="Gateway_PaymentMethod" targetRef="Task_TapSmartCard">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${method == 'card'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_PayByCash" name="Dinheiro" sourceRef="Gateway_PaymentMethod" targetRef="Task_PayWithCash">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${method == 'cash'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_TapToValidate" sourceRef="Task_TapSmartCard" targetRef="Task_ValidateCardBalance" />
+    <bpmn:sequenceFlow id="Flow_ValidateToBalanceGateway" sourceRef="Task_ValidateCardBalance" targetRef="Gateway_CardBalanceCheck" />
+    
+    <bpmn:sequenceFlow id="Flow_BalanceSufficient" name="Saldo suficiente" sourceRef="Gateway_CardBalanceCheck" targetRef="Task_DeductFare">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${cardBalance &gt;= fare}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_DeductToUnlock" sourceRef="Task_DeductFare" targetRef="Task_UnlockTurnstile" />
+
+    <bpmn:sequenceFlow id="Flow_BalanceInsufficient" name="Saldo insuficiente" sourceRef="Gateway_CardBalanceCheck" targetRef="Task_AlertInsufficientBalance">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${cardBalance &lt; fare}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_AlertToFallback" sourceRef="Task_AlertInsufficientBalance" targetRef="Gateway_FallbackCash" />
+
+    <bpmn:sequenceFlow id="Flow_HasFallbackCash" name="Possui dinheiro" sourceRef="Gateway_FallbackCash" targetRef="Task_PayWithCash">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${hasCash == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_NoFallbackCash" name="Sem dinheiro" sourceRef="Gateway_FallbackCash" targetRef="End_LeftNoFunds">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${hasCash == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_PayToReceiveCash" sourceRef="Task_PayWithCash" targetRef="Task_ReceiveCash" />
+    <bpmn:sequenceFlow id="Flow_ReceiveToChangeGateway" sourceRef="Task_ReceiveCash" targetRef="Gateway_HasChange" />
+
+    <bpmn:sequenceFlow id="Flow_ChangeAvailable" name="Troco OK ou valor exato" sourceRef="Gateway_HasChange" targetRef="Task_CalculateAndReturnChange">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${hasChange == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ChangeToAuthorize" sourceRef="Task_CalculateAndReturnChange" targetRef="Task_AuthorizeTurnstileManual" />
+    <bpmn:sequenceFlow id="Flow_AuthorizeToUnlock" sourceRef="Task_AuthorizeTurnstileManual" targetRef="Task_UnlockTurnstile" />
+
+    <bpmn:sequenceFlow id="Flow_ChangeUnavailable" name="Sem troco disponível" sourceRef="Gateway_HasChange" targetRef="Task_UnableToGiveChange">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${hasChange == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_NoChangeToEnd" sourceRef="Task_UnableToGiveChange" targetRef="End_LeftNoFunds" />
+
+    <bpmn:sequenceFlow id="Flow_UnlockToPass" sourceRef="Task_UnlockTurnstile" targetRef="Task_PassTurnstile" />
+    <bpmn:sequenceFlow id="Flow_PassToCloseDoors" sourceRef="Task_PassTurnstile" targetRef="Task_CloseDoors" />
+    <bpmn:sequenceFlow id="Flow_DoorsToResume" sourceRef="Task_CloseDoors" targetRef="Task_ResumeRoute" />
+    <bpmn:sequenceFlow id="Flow_ResumeToSeatCheck" sourceRef="Task_ResumeRoute" targetRef="Gateway_SeatAvailable" />
+
+    <bpmn:sequenceFlow id="Flow_SeatFreeYes" name="Sim" sourceRef="Gateway_SeatAvailable" targetRef="Task_SitInSeat">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${hasFreeSeat == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_SitToMerge" sourceRef="Task_SitInSeat" targetRef="Gateway_MergePosture" />
+
+    <bpmn:sequenceFlow id="Flow_SeatFreeNo" name="Não" sourceRef="Gateway_SeatAvailable" targetRef="Task_TravelStanding">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${hasFreeSeat == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_StandToMerge" sourceRef="Task_TravelStanding" targetRef="Gateway_MergePosture" />
+
+    <bpmn:sequenceFlow id="Flow_MergeToPressButton" sourceRef="Gateway_MergePosture" targetRef="Task_PressStopButton" />
+    <bpmn:sequenceFlow id="Flow_ButtonToTrigger" sourceRef="Task_PressStopButton" targetRef="Task_TriggerStopIndicator" />
+    <bpmn:sequenceFlow id="Flow_TriggerToStop" sourceRef="Task_TriggerStopIndicator" targetRef="Task_StopAtDestination" />
+    <bpmn:sequenceFlow id="Flow_StopToOpenRear" sourceRef="Task_StopAtDestination" targetRef="Task_OpenRearDoors" />
+    <bpmn:sequenceFlow id="Flow_OpenRearToDisembark" sourceRef="Task_OpenRearDoors" targetRef="Task_DisembarkBus" />
+    <bpmn:sequenceFlow id="Flow_DisembarkToEnd" sourceRef="Task_DisembarkBus" targetRef="End_TripCompleted" />
+
+  </bpmn:process>
+<bpmndi:BPMNDiagram id="BPMNDiagram_Process_BusBoarding"><bpmndi:BPMNPlane id="BPMNPlane_Process_BusBoarding" bpmnElement="Process_BusBoarding"><bpmndi:BPMNShape id="Lane_Passenger_di" bpmnElement="Lane_Passenger" isHorizontal="true"><omgdc:Bounds x="0" y="60" width="4850" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_Driver_di" bpmnElement="Lane_Driver" isHorizontal="true"><omgdc:Bounds x="0" y="420" width="4850" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_FareCollector_di" bpmnElement="Lane_FareCollector" isHorizontal="true"><omgdc:Bounds x="0" y="780" width="4850" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_BusSystem_di" bpmnElement="Lane_BusSystem" isHorizontal="true"><omgdc:Bounds x="0" y="1140" width="4850" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Start_PassengerAtStop_di" bpmnElement="Start_PassengerAtStop"><omgdc:Bounds x="160" y="222" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_SignalBus_di" bpmnElement="Task_SignalBus"><omgdc:Bounds x="310" y="200" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_CheckCapacity_di" bpmnElement="Task_CheckCapacity"><omgdc:Bounds x="460" y="560" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_IsBusFull_di" bpmnElement="Gateway_IsBusFull"><omgdc:Bounds x="610" y="575" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_BypassStop_di" bpmnElement="Task_BypassStop"><omgdc:Bounds x="760" y="500" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ParkAtStop_di" bpmnElement="Task_ParkAtStop"><omgdc:Bounds x="760" y="620" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_MissedBusFull_di" bpmnElement="End_MissedBusFull"><omgdc:Bounds x="910" y="162" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_OpenFrontDoors_di" bpmnElement="Task_OpenFrontDoors"><omgdc:Bounds x="910" y="1340" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_BoardBus_di" bpmnElement="Task_BoardBus"><omgdc:Bounds x="1060" y="260" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_PaymentMethod_di" bpmnElement="Gateway_PaymentMethod"><omgdc:Bounds x="1210" y="275" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_TapSmartCard_di" bpmnElement="Task_TapSmartCard"><omgdc:Bounds x="1360" y="200" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ValidateCardBalance_di" bpmnElement="Task_ValidateCardBalance"><omgdc:Bounds x="1510" y="1280" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_CardBalanceCheck_di" bpmnElement="Gateway_CardBalanceCheck"><omgdc:Bounds x="1660" y="1295" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_DeductFare_di" bpmnElement="Task_DeductFare"><omgdc:Bounds x="1810" y="1220" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_AlertInsufficientBalance_di" bpmnElement="Task_AlertInsufficientBalance"><omgdc:Bounds x="1810" y="1340" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_FallbackCash_di" bpmnElement="Gateway_FallbackCash"><omgdc:Bounds x="1960" y="275" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_PayWithCash_di" bpmnElement="Task_PayWithCash"><omgdc:Bounds x="2110" y="320" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ReceiveCash_di" bpmnElement="Task_ReceiveCash"><omgdc:Bounds x="2260" y="1040" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_HasChange_di" bpmnElement="Gateway_HasChange"><omgdc:Bounds x="2410" y="1055" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_UnableToGiveChange_di" bpmnElement="Task_UnableToGiveChange"><omgdc:Bounds x="2560" y="1040" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_CalculateAndReturnChange_di" bpmnElement="Task_CalculateAndReturnChange"><omgdc:Bounds x="2560" y="980" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_LeftNoFunds_di" bpmnElement="End_LeftNoFunds"><omgdc:Bounds x="2710" y="342" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_AuthorizeTurnstileManual_di" bpmnElement="Task_AuthorizeTurnstileManual"><omgdc:Bounds x="2710" y="980" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_UnlockTurnstile_di" bpmnElement="Task_UnlockTurnstile"><omgdc:Bounds x="2860" y="1220" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_PassTurnstile_di" bpmnElement="Task_PassTurnstile"><omgdc:Bounds x="3010" y="140" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_CloseDoors_di" bpmnElement="Task_CloseDoors"><omgdc:Bounds x="3160" y="1220" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ResumeRoute_di" bpmnElement="Task_ResumeRoute"><omgdc:Bounds x="3310" y="500" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_SeatAvailable_di" bpmnElement="Gateway_SeatAvailable"><omgdc:Bounds x="3460" y="155" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_SitInSeat_di" bpmnElement="Task_SitInSeat"><omgdc:Bounds x="3610" y="80" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_TravelStanding_di" bpmnElement="Task_TravelStanding"><omgdc:Bounds x="3610" y="200" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_MergePosture_di" bpmnElement="Gateway_MergePosture"><omgdc:Bounds x="3760" y="95" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_PressStopButton_di" bpmnElement="Task_PressStopButton"><omgdc:Bounds x="3910" y="80" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_TriggerStopIndicator_di" bpmnElement="Task_TriggerStopIndicator"><omgdc:Bounds x="4060" y="1160" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_StopAtDestination_di" bpmnElement="Task_StopAtDestination"><omgdc:Bounds x="4210" y="440" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_OpenRearDoors_di" bpmnElement="Task_OpenRearDoors"><omgdc:Bounds x="4360" y="1160" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_DisembarkBus_di" bpmnElement="Task_DisembarkBus"><omgdc:Bounds x="4510" y="80" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_TripCompleted_di" bpmnElement="End_TripCompleted"><omgdc:Bounds x="4660" y="102" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id="Flow_StartToSignal_di" bpmnElement="Flow_StartToSignal"><omgdi:waypoint x="196" y="240" /><omgdi:waypoint x="310" y="240" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SignalToCheck_di" bpmnElement="Flow_SignalToCheck"><omgdi:waypoint x="410" y="240" /><omgdi:waypoint x="460" y="600" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_CheckToFullGateway_di" bpmnElement="Flow_CheckToFullGateway"><omgdi:waypoint x="560" y="600" /><omgdi:waypoint x="610" y="600" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BusFullYes_di" bpmnElement="Flow_BusFullYes"><omgdi:waypoint x="660" y="600" /><omgdi:waypoint x="760" y="540" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BypassToEnd_di" bpmnElement="Flow_BypassToEnd"><omgdi:waypoint x="860" y="540" /><omgdi:waypoint x="910" y="180" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BusFullNo_di" bpmnElement="Flow_BusFullNo"><omgdi:waypoint x="660" y="600" /><omgdi:waypoint x="760" y="660" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ParkToOpenDoors_di" bpmnElement="Flow_ParkToOpenDoors"><omgdi:waypoint x="860" y="660" /><omgdi:waypoint x="910" y="1380" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_DoorsToBoard_di" bpmnElement="Flow_DoorsToBoard"><omgdi:waypoint x="1010" y="1380" /><omgdi:waypoint x="1060" y="300" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BoardToPayGateway_di" bpmnElement="Flow_BoardToPayGateway"><omgdi:waypoint x="1160" y="300" /><omgdi:waypoint x="1210" y="300" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_PayByCard_di" bpmnElement="Flow_PayByCard"><omgdi:waypoint x="1260" y="300" /><omgdi:waypoint x="1360" y="240" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_PayByCash_di" bpmnElement="Flow_PayByCash"><omgdi:waypoint x="1260" y="300" /><omgdi:waypoint x="2110" y="360" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_TapToValidate_di" bpmnElement="Flow_TapToValidate"><omgdi:waypoint x="1460" y="240" /><omgdi:waypoint x="1510" y="1320" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ValidateToBalanceGateway_di" bpmnElement="Flow_ValidateToBalanceGateway"><omgdi:waypoint x="1610" y="1320" /><omgdi:waypoint x="1660" y="1320" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BalanceSufficient_di" bpmnElement="Flow_BalanceSufficient"><omgdi:waypoint x="1710" y="1320" /><omgdi:waypoint x="1810" y="1260" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_DeductToUnlock_di" bpmnElement="Flow_DeductToUnlock"><omgdi:waypoint x="1910" y="1260" /><omgdi:waypoint x="2860" y="1260" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BalanceInsufficient_di" bpmnElement="Flow_BalanceInsufficient"><omgdi:waypoint x="1710" y="1320" /><omgdi:waypoint x="1810" y="1380" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_AlertToFallback_di" bpmnElement="Flow_AlertToFallback"><omgdi:waypoint x="1910" y="1380" /><omgdi:waypoint x="1960" y="300" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_HasFallbackCash_di" bpmnElement="Flow_HasFallbackCash"><omgdi:waypoint x="2010" y="300" /><omgdi:waypoint x="2110" y="360" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_NoFallbackCash_di" bpmnElement="Flow_NoFallbackCash"><omgdi:waypoint x="2010" y="300" /><omgdi:waypoint x="2710" y="360" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_PayToReceiveCash_di" bpmnElement="Flow_PayToReceiveCash"><omgdi:waypoint x="2210" y="360" /><omgdi:waypoint x="2260" y="1080" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ReceiveToChangeGateway_di" bpmnElement="Flow_ReceiveToChangeGateway"><omgdi:waypoint x="2360" y="1080" /><omgdi:waypoint x="2410" y="1080" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ChangeAvailable_di" bpmnElement="Flow_ChangeAvailable"><omgdi:waypoint x="2460" y="1080" /><omgdi:waypoint x="2560" y="1020" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ChangeToAuthorize_di" bpmnElement="Flow_ChangeToAuthorize"><omgdi:waypoint x="2660" y="1020" /><omgdi:waypoint x="2710" y="1020" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_AuthorizeToUnlock_di" bpmnElement="Flow_AuthorizeToUnlock"><omgdi:waypoint x="2810" y="1020" /><omgdi:waypoint x="2860" y="1260" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ChangeUnavailable_di" bpmnElement="Flow_ChangeUnavailable"><omgdi:waypoint x="2460" y="1080" /><omgdi:waypoint x="2560" y="1080" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_NoChangeToEnd_di" bpmnElement="Flow_NoChangeToEnd"><omgdi:waypoint x="2660" y="1080" /><omgdi:waypoint x="2710" y="360" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_UnlockToPass_di" bpmnElement="Flow_UnlockToPass"><omgdi:waypoint x="2960" y="1260" /><omgdi:waypoint x="3010" y="180" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_PassToCloseDoors_di" bpmnElement="Flow_PassToCloseDoors"><omgdi:waypoint x="3110" y="180" /><omgdi:waypoint x="3160" y="1260" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_DoorsToResume_di" bpmnElement="Flow_DoorsToResume"><omgdi:waypoint x="3260" y="1260" /><omgdi:waypoint x="3310" y="540" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ResumeToSeatCheck_di" bpmnElement="Flow_ResumeToSeatCheck"><omgdi:waypoint x="3410" y="540" /><omgdi:waypoint x="3460" y="180" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SeatFreeYes_di" bpmnElement="Flow_SeatFreeYes"><omgdi:waypoint x="3510" y="180" /><omgdi:waypoint x="3610" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SitToMerge_di" bpmnElement="Flow_SitToMerge"><omgdi:waypoint x="3710" y="120" /><omgdi:waypoint x="3760" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SeatFreeNo_di" bpmnElement="Flow_SeatFreeNo"><omgdi:waypoint x="3510" y="180" /><omgdi:waypoint x="3610" y="240" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_StandToMerge_di" bpmnElement="Flow_StandToMerge"><omgdi:waypoint x="3710" y="240" /><omgdi:waypoint x="3760" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_MergeToPressButton_di" bpmnElement="Flow_MergeToPressButton"><omgdi:waypoint x="3810" y="120" /><omgdi:waypoint x="3910" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ButtonToTrigger_di" bpmnElement="Flow_ButtonToTrigger"><omgdi:waypoint x="4010" y="120" /><omgdi:waypoint x="4060" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_TriggerToStop_di" bpmnElement="Flow_TriggerToStop"><omgdi:waypoint x="4160" y="1200" /><omgdi:waypoint x="4210" y="480" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_StopToOpenRear_di" bpmnElement="Flow_StopToOpenRear"><omgdi:waypoint x="4310" y="480" /><omgdi:waypoint x="4360" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_OpenRearToDisembark_di" bpmnElement="Flow_OpenRearToDisembark"><omgdi:waypoint x="4460" y="1200" /><omgdi:waypoint x="4510" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_DisembarkToEnd_di" bpmnElement="Flow_DisembarkToEnd"><omgdi:waypoint x="4610" y="120" /><omgdi:waypoint x="4660" y="120" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>

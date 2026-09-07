@@ -9,3 +9,5 @@ governance:
     - env:PYTHONPATH =
 verification:
   enforce_tdd: false
+  test_command: "python scripts/verify_tests.py"
+  test_glob: "tests/**/*.py"

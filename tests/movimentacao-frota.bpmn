@@ -1,0 +1,300 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_MovimentacaoFrota" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_MovimentacaoFrota" name="Movimentação de Frota Corporativa" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_MovimentacaoFrota">
+      <bpmn:lane id="Lane_CorretorSegurado" name="Corretor / Segurado Corporativo">
+        <bpmn:flowNodeRef>Start_PlanilhaEnviada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_PreencherEnviarPlanilha</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ReceberNotificacaoAjuste</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AcessarKitEDocumentos</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_Operacoes" name="Operações e Emissão">
+        <bpmn:flowNodeRef>Task_ReceberSubmeterCarga</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_RevisarLoteOperacoes</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_LoteAprovado</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SolicitarCorrecao</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_LoteDevolvidoCorrecao</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_SistemaCore" name="Sistema de Gestão de Seguros (Core)">
+        <bpmn:flowNodeRef>Task_LerPlanilhaEAssociarApolice</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ValidarRegrasCadastraisECoberturas</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AgruparMovimentacoes</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CalcularPremioETributos</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_EmitirEndossoEAtualizarItens</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_TipoSaldoEndosso</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_GerarPlanoParcelamento</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_GerarOrdemRestituicaoCredito</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_MergePlanoFinanceiro</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_SplitFasesParalelas</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_MontarKitDigital</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_DisponibilizarEEnviarKit</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_RegistrarEvidenciaEntrega</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_JoinConclusaoProcesso</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_EncerrarCicloAtualizarApolice</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_CicloMovimentacaoConcluido</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_FinanceiroCobranca" name="Financeiro e Arrecadação">
+        <bpmn:flowNodeRef>Gateway_RoteamentoCobrancaRestituicao</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_TransmitirTitulosArrecadador</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ProcessarRetornoEBaixar</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ExecutarRestituicaoOuCompensacao</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_MergeRetornoFinanceiro</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_LiberarComissaoCorretor</bpmn:flowNodeRef>
+      </bpmn:lane>
+
+      <bpmn:lane id="Lane_ContabilidadeAtuarial" name="Contabilidade e Provisões Técnicas">
+        <bpmn:flowNodeRef>Task_ContabilizarEmissaoETributos</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ConstituirPPNG</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ContabilizarBaixaEConciliar</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    
+    <bpmn:startEvent id="Start_PlanilhaEnviada" name="Planilha de movimentação enviada">
+      <bpmn:outgoing>Flow_StartToPreencher</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Task_PreencherEnviarPlanilha" name="Enviar planilha padronizada com movimentações da frota">
+      <bpmn:incoming>Flow_StartToPreencher</bpmn:incoming>
+      <bpmn:outgoing>Flow_EnviarParaOperacoes</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Task_ReceberSubmeterCarga" name="Receber arquivo e submeter à carga no sistema">
+      <bpmn:incoming>Flow_EnviarParaOperacoes</bpmn:incoming>
+      <bpmn:outgoing>Flow_SubmeterParaLeitura</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_LerPlanilhaEAssociarApolice" name="Ler layout da planilha, associar à apólice mãe e criar registros pendentes">
+      <bpmn:incoming>Flow_SubmeterParaLeitura</bpmn:incoming>
+      <bpmn:outgoing>Flow_LeituraParaValidacao</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ValidarRegrasCadastraisECoberturas" name="Validar campos, regras cadastrais, existência do item e coberturas da apólice">
+      <bpmn:incoming>Flow_LeituraParaValidacao</bpmn:incoming>
+      <bpmn:outgoing>Flow_ValidacaoParaRevisao</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Task_RevisarLoteOperacoes" name="Conferir lote carregado e liberar processamento">
+      <bpmn:incoming>Flow_ValidacaoParaRevisao</bpmn:incoming>
+      <bpmn:outgoing>Flow_RevisaoParaGateway</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_LoteAprovado" name="Lote validado e liberado?">
+      <bpmn:incoming>Flow_RevisaoParaGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_LoteAprovadoSim</bpmn:outgoing>
+      <bpmn:outgoing>Flow_LoteAprovadoNao</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_SolicitarCorrecao" name="Apontar inconsistências e solicitar correção da planilha">
+      <bpmn:incoming>Flow_LoteAprovadoNao</bpmn:incoming>
+      <bpmn:outgoing>Flow_SolicitarParaAjuste</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Task_ReceberNotificacaoAjuste" name="Receber divergências apontadas para saneamento">
+      <bpmn:incoming>Flow_SolicitarParaAjuste</bpmn:incoming>
+      <bpmn:outgoing>Flow_AjusteParaFimRejeitado</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End_LoteDevolvidoCorrecao" name="Lote devolvido para saneamento cadastral">
+      <bpmn:incoming>Flow_AjusteParaFimRejeitado</bpmn:incoming>
+    </bpmn:endEvent>
+
+    
+    <bpmn:serviceTask id="Task_AgruparMovimentacoes" name="Agrupar movimentações conforme regras de emissão da apólice">
+      <bpmn:incoming>Flow_LoteAprovadoSim</bpmn:incoming>
+      <bpmn:outgoing>Flow_AgruparParaCalcular</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_CalcularPremioETributos" name="Calcular prêmio proporcional pro rata temporis, IOF e comissão da corretagem">
+      <bpmn:incoming>Flow_AgruparParaCalcular</bpmn:incoming>
+      <bpmn:outgoing>Flow_CalcularParaEmitir</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_EmitirEndossoEAtualizarItens" name="Emitir endosso, atualizar cadastro dos itens (vigente/cancelado) e demonstrativo">
+      <bpmn:incoming>Flow_CalcularParaEmitir</bpmn:incoming>
+      <bpmn:outgoing>Flow_EmitirParaTipoSaldo</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_TipoSaldoEndosso" name="Qual a natureza financeira do endosso?">
+      <bpmn:incoming>Flow_EmitirParaTipoSaldo</bpmn:incoming>
+      <bpmn:outgoing>Flow_SaldoCobranca</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SaldoRestituicao</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_GerarPlanoParcelamento" name="Gerar plano de pagamento, parcelas e títulos com datas de vencimento">
+      <bpmn:incoming>Flow_SaldoCobranca</bpmn:incoming>
+      <bpmn:outgoing>Flow_CobrancaParaMerge</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_GerarOrdemRestituicaoCredito" name="Gerar ordem de restituição ao segurado ou crédito para compensação futura">
+      <bpmn:incoming>Flow_SaldoRestituicao</bpmn:incoming>
+      <bpmn:outgoing>Flow_RestituicaoParaMerge</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_MergePlanoFinanceiro" name="Convergência do plano financeiro">
+      <bpmn:incoming>Flow_CobrancaParaMerge</bpmn:incoming>
+      <bpmn:incoming>Flow_RestituicaoParaMerge</bpmn:incoming>
+      <bpmn:outgoing>Flow_MergeParaParallelSplit</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    
+    <bpmn:parallelGateway id="Gateway_SplitFasesParalelas" name="Disparar fases paralelas">
+      <bpmn:incoming>Flow_MergeParaParallelSplit</bpmn:incoming>
+      <bpmn:outgoing>Flow_SplitParaFinanceiro</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SplitParaContabilidade</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SplitParaKitDigital</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    
+    <bpmn:exclusiveGateway id="Gateway_RoteamentoCobrancaRestituicao" name="Tipo de operação financeira?">
+      <bpmn:incoming>Flow_SplitParaFinanceiro</bpmn:incoming>
+      <bpmn:outgoing>Flow_RotaParaCobranca</bpmn:outgoing>
+      <bpmn:outgoing>Flow_RotaParaRestituicao</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_TransmitirTitulosArrecadador" name="Transmitir títulos ao agente arrecadador (boleto, débito ou fatura)">
+      <bpmn:incoming>Flow_RotaParaCobranca</bpmn:incoming>
+      <bpmn:outgoing>Flow_TransmitirParaBaixa</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ProcessarRetornoEBaixar" name="Processar arquivo de retorno bancário e baixar parcelas liquidadas">
+      <bpmn:incoming>Flow_TransmitirParaBaixa</bpmn:incoming>
+      <bpmn:outgoing>Flow_BaixaParaMergeFinanceiro</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ExecutarRestituicaoOuCompensacao" name="Efetuar pagamento da restituição ou aplicar crédito em parcelas">
+      <bpmn:incoming>Flow_RotaParaRestituicao</bpmn:incoming>
+      <bpmn:outgoing>Flow_RestituirParaMergeFinanceiro</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_MergeRetornoFinanceiro" name="Convergência da liquidação">
+      <bpmn:incoming>Flow_BaixaParaMergeFinanceiro</bpmn:incoming>
+      <bpmn:incoming>Flow_RestituirParaMergeFinanceiro</bpmn:incoming>
+      <bpmn:outgoing>Flow_FinanceiroParaLiberarComissao</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_LiberarComissaoCorretor" name="Liberar comissão do corretor para pagamento (provisionada para devida)">
+      <bpmn:incoming>Flow_FinanceiroParaLiberarComissao</bpmn:incoming>
+      <bpmn:outgoing>Flow_FinanceiroParaJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    
+    <bpmn:serviceTask id="Task_ContabilizarEmissaoETributos" name="Registrar lançamentos contábeis da emissão, contas a receber, tributos e provisão de comissão">
+      <bpmn:incoming>Flow_SplitParaContabilidade</bpmn:incoming>
+      <bpmn:outgoing>Flow_ContabilParaPPNG</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ConstituirPPNG" name="Constituir Provisão de Prêmios Não Ganhos (PPNG) e apropriar ao resultado">
+      <bpmn:incoming>Flow_ContabilParaPPNG</bpmn:incoming>
+      <bpmn:outgoing>Flow_PPNGParaLiquidacaoContabil</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_ContabilizarBaixaEConciliar" name="Contabilizar liquidação financeira, reverter provisões se restituição e conciliar contas">
+      <bpmn:incoming>Flow_PPNGParaLiquidacaoContabil</bpmn:incoming>
+      <bpmn:outgoing>Flow_ContabilParaJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    
+    <bpmn:serviceTask id="Task_MontarKitDigital" name="Montar kit digital com endosso, certificados individuais, condições e demonstrativo">
+      <bpmn:incoming>Flow_SplitParaKitDigital</bpmn:incoming>
+      <bpmn:outgoing>Flow_MontarParaEnviarKit</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_DisponibilizarEEnviarKit" name="Disponibilizar kit no portal do cliente e enviar por e-mail">
+      <bpmn:incoming>Flow_MontarParaEnviarKit</bpmn:incoming>
+      <bpmn:outgoing>Flow_EnviarKitParaCliente</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Task_AcessarKitEDocumentos" name="Acessar kit digital, certificados individuais e comprovantes/boletos">
+      <bpmn:incoming>Flow_EnviarKitParaCliente</bpmn:incoming>
+      <bpmn:outgoing>Flow_ClienteParaEvidencia</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_RegistrarEvidenciaEntrega" name="Registrar data, destinatários e confirmação de entrega do kit">
+      <bpmn:incoming>Flow_ClienteParaEvidencia</bpmn:incoming>
+      <bpmn:outgoing>Flow_KitDigitalParaJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    
+    <bpmn:parallelGateway id="Gateway_JoinConclusaoProcesso" name="Sincronizar conclusão das trilhas paralelas">
+      <bpmn:incoming>Flow_FinanceiroParaJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_ContabilParaJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_KitDigitalParaJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_JoinParaEncerrarCiclo</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <bpmn:serviceTask id="Task_EncerrarCicloAtualizarApolice" name="Atualizar composição de itens da apólice e disponibilizar para novo ciclo">
+      <bpmn:incoming>Flow_JoinParaEncerrarCiclo</bpmn:incoming>
+      <bpmn:outgoing>Flow_EncerrarParaFimSucesso</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End_CicloMovimentacaoConcluido" name="Ciclo de movimentação de frota finalizado com sucesso">
+      <bpmn:incoming>Flow_EncerrarParaFimSucesso</bpmn:incoming>
+    </bpmn:endEvent>
+
+    
+    <bpmn:sequenceFlow id="Flow_StartToPreencher" sourceRef="Start_PlanilhaEnviada" targetRef="Task_PreencherEnviarPlanilha" />
+    <bpmn:sequenceFlow id="Flow_EnviarParaOperacoes" sourceRef="Task_PreencherEnviarPlanilha" targetRef="Task_ReceberSubmeterCarga" />
+    <bpmn:sequenceFlow id="Flow_SubmeterParaLeitura" sourceRef="Task_ReceberSubmeterCarga" targetRef="Task_LerPlanilhaEAssociarApolice" />
+    <bpmn:sequenceFlow id="Flow_LeituraParaValidacao" sourceRef="Task_LerPlanilhaEAssociarApolice" targetRef="Task_ValidarRegrasCadastraisECoberturas" />
+    <bpmn:sequenceFlow id="Flow_ValidacaoParaRevisao" sourceRef="Task_ValidarRegrasCadastraisECoberturas" targetRef="Task_RevisarLoteOperacoes" />
+    <bpmn:sequenceFlow id="Flow_RevisaoParaGateway" sourceRef="Task_RevisarLoteOperacoes" targetRef="Gateway_LoteAprovado" />
+    
+    <bpmn:sequenceFlow id="Flow_LoteAprovadoSim" name="Aprovado" sourceRef="Gateway_LoteAprovado" targetRef="Task_AgruparMovimentacoes">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">loteAprovado == true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_LoteAprovadoNao" name="Inconsistente" sourceRef="Gateway_LoteAprovado" targetRef="Task_SolicitarCorrecao">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">loteAprovado == false</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    
+    <bpmn:sequenceFlow id="Flow_SolicitarParaAjuste" sourceRef="Task_SolicitarCorrecao" targetRef="Task_ReceberNotificacaoAjuste" />
+    <bpmn:sequenceFlow id="Flow_AjusteParaFimRejeitado" sourceRef="Task_ReceberNotificacaoAjuste" targetRef="End_LoteDevolvidoCorrecao" />
+
+    <bpmn:sequenceFlow id="Flow_AgruparParaCalcular" sourceRef="Task_AgruparMovimentacoes" targetRef="Task_CalcularPremioETributos" />
+    <bpmn:sequenceFlow id="Flow_CalcularParaEmitir" sourceRef="Task_CalcularPremioETributos" targetRef="Task_EmitirEndossoEAtualizarItens" />
+    <bpmn:sequenceFlow id="Flow_EmitirParaTipoSaldo" sourceRef="Task_EmitirEndossoEAtualizarItens" targetRef="Gateway_TipoSaldoEndosso" />
+
+    <bpmn:sequenceFlow id="Flow_SaldoCobranca" name="Prêmio a Receber (Cobrança)" sourceRef="Gateway_TipoSaldoEndosso" targetRef="Task_GerarPlanoParcelamento">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">saldo == 'cobranca'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_SaldoRestituicao" name="Restituição / Crédito" sourceRef="Gateway_TipoSaldoEndosso" targetRef="Task_GerarOrdemRestituicaoCredito">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">saldo == 'restituicao'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_CobrancaParaMerge" sourceRef="Task_GerarPlanoParcelamento" targetRef="Gateway_MergePlanoFinanceiro" />
+    <bpmn:sequenceFlow id="Flow_RestituicaoParaMerge" sourceRef="Task_GerarOrdemRestituicaoCredito" targetRef="Gateway_MergePlanoFinanceiro" />
+    <bpmn:sequenceFlow id="Flow_MergeParaParallelSplit" sourceRef="Gateway_MergePlanoFinanceiro" targetRef="Gateway_SplitFasesParalelas" />
+
+    <bpmn:sequenceFlow id="Flow_SplitParaFinanceiro" sourceRef="Gateway_SplitFasesParalelas" targetRef="Gateway_RoteamentoCobrancaRestituicao" />
+    <bpmn:sequenceFlow id="Flow_SplitParaContabilidade" sourceRef="Gateway_SplitFasesParalelas" targetRef="Task_ContabilizarEmissaoETributos" />
+    <bpmn:sequenceFlow id="Flow_SplitParaKitDigital" sourceRef="Gateway_SplitFasesParalelas" targetRef="Task_MontarKitDigital" />
+
+    <bpmn:sequenceFlow id="Flow_RotaParaCobranca" name="Cobrança bancária" sourceRef="Gateway_RoteamentoCobrancaRestituicao" targetRef="Task_TransmitirTitulosArrecadador">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">saldo == 'cobranca'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_RotaParaRestituicao" name="Restituição" sourceRef="Gateway_RoteamentoCobrancaRestituicao" targetRef="Task_ExecutarRestituicaoOuCompensacao">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">saldo == 'restituicao'</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+
+    <bpmn:sequenceFlow id="Flow_TransmitirParaBaixa" sourceRef="Task_TransmitirTitulosArrecadador" targetRef="Task_ProcessarRetornoEBaixar" />
+    <bpmn:sequenceFlow id="Flow_BaixaParaMergeFinanceiro" sourceRef="Task_ProcessarRetornoEBaixar" targetRef="Gateway_MergeRetornoFinanceiro" />
+    <bpmn:sequenceFlow id="Flow_RestituirParaMergeFinanceiro" sourceRef="Task_ExecutarRestituicaoOuCompensacao" targetRef="Gateway_MergeRetornoFinanceiro" />
+    <bpmn:sequenceFlow id="Flow_FinanceiroParaLiberarComissao" sourceRef="Gateway_MergeRetornoFinanceiro" targetRef="Task_LiberarComissaoCorretor" />
+    <bpmn:sequenceFlow id="Flow_FinanceiroParaJoin" sourceRef="Task_LiberarComissaoCorretor" targetRef="Gateway_JoinConclusaoProcesso" />
+
+    <bpmn:sequenceFlow id="Flow_ContabilParaPPNG" sourceRef="Task_ContabilizarEmissaoETributos" targetRef="Task_ConstituirPPNG" />
+    <bpmn:sequenceFlow id="Flow_PPNGParaLiquidacaoContabil" sourceRef="Task_ConstituirPPNG" targetRef="Task_ContabilizarBaixaEConciliar" />
+    <bpmn:sequenceFlow id="Flow_ContabilParaJoin" sourceRef="Task_ContabilizarBaixaEConciliar" targetRef="Gateway_JoinConclusaoProcesso" />
+
+    <bpmn:sequenceFlow id="Flow_MontarParaEnviarKit" sourceRef="Task_MontarKitDigital" targetRef="Task_DisponibilizarEEnviarKit" />
+    <bpmn:sequenceFlow id="Flow_EnviarKitParaCliente" sourceRef="Task_DisponibilizarEEnviarKit" targetRef="Task_AcessarKitEDocumentos" />
+    <bpmn:sequenceFlow id="Flow_ClienteParaEvidencia" sourceRef="Task_AcessarKitEDocumentos" targetRef="Task_RegistrarEvidenciaEntrega" />
+    <bpmn:sequenceFlow id="Flow_KitDigitalParaJoin" sourceRef="Task_RegistrarEvidenciaEntrega" targetRef="Gateway_JoinConclusaoProcesso" />
+
+    <bpmn:sequenceFlow id="Flow_JoinParaEncerrarCiclo" sourceRef="Gateway_JoinConclusaoProcesso" targetRef="Task_EncerrarCicloAtualizarApolice" />
+    <bpmn:sequenceFlow id="Flow_EncerrarParaFimSucesso" sourceRef="Task_EncerrarCicloAtualizarApolice" targetRef="End_CicloMovimentacaoConcluido" />
+  </bpmn:process>
+<bpmndi:BPMNDiagram id="BPMNDiagram_Process_MovimentacaoFrota"><bpmndi:BPMNPlane id="BPMNPlane_Process_MovimentacaoFrota" bpmnElement="Process_MovimentacaoFrota"><bpmndi:BPMNShape id="Lane_CorretorSegurado_di" bpmnElement="Lane_CorretorSegurado" isHorizontal="true"><omgdc:Bounds x="0" y="60" width="3500" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_Operacoes_di" bpmnElement="Lane_Operacoes" isHorizontal="true"><omgdc:Bounds x="0" y="420" width="3500" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_SistemaCore_di" bpmnElement="Lane_SistemaCore" isHorizontal="true"><omgdc:Bounds x="0" y="780" width="3500" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_FinanceiroCobranca_di" bpmnElement="Lane_FinanceiroCobranca" isHorizontal="true"><omgdc:Bounds x="0" y="1140" width="3500" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_ContabilidadeAtuarial_di" bpmnElement="Lane_ContabilidadeAtuarial" isHorizontal="true"><omgdc:Bounds x="0" y="1500" width="3500" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Start_PlanilhaEnviada_di" bpmnElement="Start_PlanilhaEnviada"><omgdc:Bounds x="160" y="222" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_PreencherEnviarPlanilha_di" bpmnElement="Task_PreencherEnviarPlanilha"><omgdc:Bounds x="310" y="200" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ReceberSubmeterCarga_di" bpmnElement="Task_ReceberSubmeterCarga"><omgdc:Bounds x="460" y="560" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_LerPlanilhaEAssociarApolice_di" bpmnElement="Task_LerPlanilhaEAssociarApolice"><omgdc:Bounds x="610" y="920" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ValidarRegrasCadastraisECoberturas_di" bpmnElement="Task_ValidarRegrasCadastraisECoberturas"><omgdc:Bounds x="760" y="920" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_RevisarLoteOperacoes_di" bpmnElement="Task_RevisarLoteOperacoes"><omgdc:Bounds x="910" y="560" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_LoteAprovado_di" bpmnElement="Gateway_LoteAprovado"><omgdc:Bounds x="1060" y="575" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_SolicitarCorrecao_di" bpmnElement="Task_SolicitarCorrecao"><omgdc:Bounds x="1210" y="620" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_AgruparMovimentacoes_di" bpmnElement="Task_AgruparMovimentacoes"><omgdc:Bounds x="1210" y="860" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ReceberNotificacaoAjuste_di" bpmnElement="Task_ReceberNotificacaoAjuste"><omgdc:Bounds x="1360" y="260" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_CalcularPremioETributos_di" bpmnElement="Task_CalcularPremioETributos"><omgdc:Bounds x="1360" y="860" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_LoteDevolvidoCorrecao_di" bpmnElement="End_LoteDevolvidoCorrecao"><omgdc:Bounds x="1510" y="642" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_EmitirEndossoEAtualizarItens_di" bpmnElement="Task_EmitirEndossoEAtualizarItens"><omgdc:Bounds x="1510" y="860" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_TipoSaldoEndosso_di" bpmnElement="Gateway_TipoSaldoEndosso"><omgdc:Bounds x="1660" y="875" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_GerarPlanoParcelamento_di" bpmnElement="Task_GerarPlanoParcelamento"><omgdc:Bounds x="1810" y="800" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_GerarOrdemRestituicaoCredito_di" bpmnElement="Task_GerarOrdemRestituicaoCredito"><omgdc:Bounds x="1810" y="920" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_MergePlanoFinanceiro_di" bpmnElement="Gateway_MergePlanoFinanceiro"><omgdc:Bounds x="1960" y="815" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_SplitFasesParalelas_di" bpmnElement="Gateway_SplitFasesParalelas"><omgdc:Bounds x="2110" y="815" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_MontarKitDigital_di" bpmnElement="Task_MontarKitDigital"><omgdc:Bounds x="2260" y="920" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_RoteamentoCobrancaRestituicao_di" bpmnElement="Gateway_RoteamentoCobrancaRestituicao"><omgdc:Bounds x="2260" y="1175" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ContabilizarEmissaoETributos_di" bpmnElement="Task_ContabilizarEmissaoETributos"><omgdc:Bounds x="2260" y="1520" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_DisponibilizarEEnviarKit_di" bpmnElement="Task_DisponibilizarEEnviarKit"><omgdc:Bounds x="2410" y="920" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ExecutarRestituicaoOuCompensacao_di" bpmnElement="Task_ExecutarRestituicaoOuCompensacao"><omgdc:Bounds x="2410" y="1160" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_TransmitirTitulosArrecadador_di" bpmnElement="Task_TransmitirTitulosArrecadador"><omgdc:Bounds x="2410" y="1280" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ConstituirPPNG_di" bpmnElement="Task_ConstituirPPNG"><omgdc:Bounds x="2410" y="1520" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_AcessarKitEDocumentos_di" bpmnElement="Task_AcessarKitEDocumentos"><omgdc:Bounds x="2560" y="200" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ProcessarRetornoEBaixar_di" bpmnElement="Task_ProcessarRetornoEBaixar"><omgdc:Bounds x="2560" y="1160" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ContabilizarBaixaEConciliar_di" bpmnElement="Task_ContabilizarBaixaEConciliar"><omgdc:Bounds x="2560" y="1520" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_RegistrarEvidenciaEntrega_di" bpmnElement="Task_RegistrarEvidenciaEntrega"><omgdc:Bounds x="2710" y="920" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_MergeRetornoFinanceiro_di" bpmnElement="Gateway_MergeRetornoFinanceiro"><omgdc:Bounds x="2710" y="1175" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_LiberarComissaoCorretor_di" bpmnElement="Task_LiberarComissaoCorretor"><omgdc:Bounds x="2860" y="1160" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_JoinConclusaoProcesso_di" bpmnElement="Gateway_JoinConclusaoProcesso"><omgdc:Bounds x="3010" y="815" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_EncerrarCicloAtualizarApolice_di" bpmnElement="Task_EncerrarCicloAtualizarApolice"><omgdc:Bounds x="3160" y="800" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_CicloMovimentacaoConcluido_di" bpmnElement="End_CicloMovimentacaoConcluido"><omgdc:Bounds x="3310" y="822" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id="Flow_StartToPreencher_di" bpmnElement="Flow_StartToPreencher"><omgdi:waypoint x="196" y="240" /><omgdi:waypoint x="310" y="240" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_EnviarParaOperacoes_di" bpmnElement="Flow_EnviarParaOperacoes"><omgdi:waypoint x="410" y="240" /><omgdi:waypoint x="460" y="600" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SubmeterParaLeitura_di" bpmnElement="Flow_SubmeterParaLeitura"><omgdi:waypoint x="560" y="600" /><omgdi:waypoint x="610" y="960" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_LeituraParaValidacao_di" bpmnElement="Flow_LeituraParaValidacao"><omgdi:waypoint x="710" y="960" /><omgdi:waypoint x="760" y="960" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ValidacaoParaRevisao_di" bpmnElement="Flow_ValidacaoParaRevisao"><omgdi:waypoint x="860" y="960" /><omgdi:waypoint x="910" y="600" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_RevisaoParaGateway_di" bpmnElement="Flow_RevisaoParaGateway"><omgdi:waypoint x="1010" y="600" /><omgdi:waypoint x="1060" y="600" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_LoteAprovadoSim_di" bpmnElement="Flow_LoteAprovadoSim"><omgdi:waypoint x="1110" y="600" /><omgdi:waypoint x="1210" y="900" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_LoteAprovadoNao_di" bpmnElement="Flow_LoteAprovadoNao"><omgdi:waypoint x="1110" y="600" /><omgdi:waypoint x="1210" y="660" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SolicitarParaAjuste_di" bpmnElement="Flow_SolicitarParaAjuste"><omgdi:waypoint x="1310" y="660" /><omgdi:waypoint x="1360" y="300" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_AjusteParaFimRejeitado_di" bpmnElement="Flow_AjusteParaFimRejeitado"><omgdi:waypoint x="1460" y="300" /><omgdi:waypoint x="1510" y="660" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_AgruparParaCalcular_di" bpmnElement="Flow_AgruparParaCalcular"><omgdi:waypoint x="1310" y="900" /><omgdi:waypoint x="1360" y="900" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_CalcularParaEmitir_di" bpmnElement="Flow_CalcularParaEmitir"><omgdi:waypoint x="1460" y="900" /><omgdi:waypoint x="1510" y="900" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_EmitirParaTipoSaldo_di" bpmnElement="Flow_EmitirParaTipoSaldo"><omgdi:waypoint x="1610" y="900" /><omgdi:waypoint x="1660" y="900" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SaldoCobranca_di" bpmnElement="Flow_SaldoCobranca"><omgdi:waypoint x="1710" y="900" /><omgdi:waypoint x="1810" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SaldoRestituicao_di" bpmnElement="Flow_SaldoRestituicao"><omgdi:waypoint x="1710" y="900" /><omgdi:waypoint x="1810" y="960" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_CobrancaParaMerge_di" bpmnElement="Flow_CobrancaParaMerge"><omgdi:waypoint x="1910" y="840" /><omgdi:waypoint x="1960" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_RestituicaoParaMerge_di" bpmnElement="Flow_RestituicaoParaMerge"><omgdi:waypoint x="1910" y="960" /><omgdi:waypoint x="1960" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_MergeParaParallelSplit_di" bpmnElement="Flow_MergeParaParallelSplit"><omgdi:waypoint x="2010" y="840" /><omgdi:waypoint x="2110" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SplitParaFinanceiro_di" bpmnElement="Flow_SplitParaFinanceiro"><omgdi:waypoint x="2160" y="840" /><omgdi:waypoint x="2260" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SplitParaContabilidade_di" bpmnElement="Flow_SplitParaContabilidade"><omgdi:waypoint x="2160" y="840" /><omgdi:waypoint x="2260" y="1560" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SplitParaKitDigital_di" bpmnElement="Flow_SplitParaKitDigital"><omgdi:waypoint x="2160" y="840" /><omgdi:waypoint x="2260" y="960" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_RotaParaCobranca_di" bpmnElement="Flow_RotaParaCobranca"><omgdi:waypoint x="2310" y="1200" /><omgdi:waypoint x="2410" y="1320" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_RotaParaRestituicao_di" bpmnElement="Flow_RotaParaRestituicao"><omgdi:waypoint x="2310" y="1200" /><omgdi:waypoint x="2410" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_TransmitirParaBaixa_di" bpmnElement="Flow_TransmitirParaBaixa"><omgdi:waypoint x="2510" y="1320" /><omgdi:waypoint x="2560" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BaixaParaMergeFinanceiro_di" bpmnElement="Flow_BaixaParaMergeFinanceiro"><omgdi:waypoint x="2660" y="1200" /><omgdi:waypoint x="2710" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_RestituirParaMergeFinanceiro_di" bpmnElement="Flow_RestituirParaMergeFinanceiro"><omgdi:waypoint x="2510" y="1200" /><omgdi:waypoint x="2710" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_FinanceiroParaLiberarComissao_di" bpmnElement="Flow_FinanceiroParaLiberarComissao"><omgdi:waypoint x="2760" y="1200" /><omgdi:waypoint x="2860" y="1200" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_FinanceiroParaJoin_di" bpmnElement="Flow_FinanceiroParaJoin"><omgdi:waypoint x="2960" y="1200" /><omgdi:waypoint x="3010" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ContabilParaPPNG_di" bpmnElement="Flow_ContabilParaPPNG"><omgdi:waypoint x="2360" y="1560" /><omgdi:waypoint x="2410" y="1560" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_PPNGParaLiquidacaoContabil_di" bpmnElement="Flow_PPNGParaLiquidacaoContabil"><omgdi:waypoint x="2510" y="1560" /><omgdi:waypoint x="2560" y="1560" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ContabilParaJoin_di" bpmnElement="Flow_ContabilParaJoin"><omgdi:waypoint x="2660" y="1560" /><omgdi:waypoint x="3010" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_MontarParaEnviarKit_di" bpmnElement="Flow_MontarParaEnviarKit"><omgdi:waypoint x="2360" y="960" /><omgdi:waypoint x="2410" y="960" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_EnviarKitParaCliente_di" bpmnElement="Flow_EnviarKitParaCliente"><omgdi:waypoint x="2510" y="960" /><omgdi:waypoint x="2560" y="240" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ClienteParaEvidencia_di" bpmnElement="Flow_ClienteParaEvidencia"><omgdi:waypoint x="2660" y="240" /><omgdi:waypoint x="2710" y="960" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_KitDigitalParaJoin_di" bpmnElement="Flow_KitDigitalParaJoin"><omgdi:waypoint x="2810" y="960" /><omgdi:waypoint x="3010" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_JoinParaEncerrarCiclo_di" bpmnElement="Flow_JoinParaEncerrarCiclo"><omgdi:waypoint x="3060" y="840" /><omgdi:waypoint x="3160" y="840" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_EncerrarParaFimSucesso_di" bpmnElement="Flow_EncerrarParaFimSucesso"><omgdi:waypoint x="3260" y="840" /><omgdi:waypoint x="3310" y="840" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>

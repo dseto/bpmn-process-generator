@@ -1,0 +1,68 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_IncidentManagement" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_IncidentManagement" name="Incident Management" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_SupportTiers">
+      <bpmn:lane id="Lane_Tier1Support" name="Tier 1 Support">
+        <bpmn:flowNodeRef>Start_IncidentLogged</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_TriageIncident</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Gateway_NeedsBugFix</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ProvideDirectSolution</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_DirectlyResolved</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_VerifyWithCustomer</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_ResolvedWithPatch</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Tier2Engineering" name="Tier 2 Engineering">
+        <bpmn:flowNodeRef>Task_InvestigateBug</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_DeployHotfix</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="Start_IncidentLogged" name="Incident logged">
+      <bpmn:outgoing>Flow_StartToTriage</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Task_TriageIncident" name="Triage incident">
+      <bpmn:incoming>Flow_StartToTriage</bpmn:incoming>
+      <bpmn:outgoing>Flow_TriageToGateway</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_NeedsBugFix" name="Code defect?">
+      <bpmn:incoming>Flow_TriageToGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Simple</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ToTier2</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_ProvideDirectSolution" name="Provide standard resolution">
+      <bpmn:incoming>Flow_Simple</bpmn:incoming>
+      <bpmn:outgoing>Flow_DirectToEnd</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_DirectlyResolved" name="Resolved directly">
+      <bpmn:incoming>Flow_DirectToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:userTask id="Task_InvestigateBug" name="Investigate bug and create fix">
+      <bpmn:incoming>Flow_ToTier2</bpmn:incoming>
+      <bpmn:outgoing>Flow_FixToDeploy</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:serviceTask id="Task_DeployHotfix" name="Deploy hotfix">
+      <bpmn:incoming>Flow_FixToDeploy</bpmn:incoming>
+      <bpmn:outgoing>Flow_BackToTier1</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_VerifyWithCustomer" name="Verify resolution with customer">
+      <bpmn:incoming>Flow_BackToTier1</bpmn:incoming>
+      <bpmn:outgoing>Flow_VerifyToEnd</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_ResolvedWithPatch" name="Resolved via hotfix">
+      <bpmn:incoming>Flow_VerifyToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_StartToTriage" sourceRef="Start_IncidentLogged" targetRef="Task_TriageIncident" />
+    <bpmn:sequenceFlow id="Flow_TriageToGateway" sourceRef="Task_TriageIncident" targetRef="Gateway_NeedsBugFix" />
+    <bpmn:sequenceFlow id="Flow_Simple" name="No" sourceRef="Gateway_NeedsBugFix" targetRef="Task_ProvideDirectSolution">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">isDefect == false</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_DirectToEnd" sourceRef="Task_ProvideDirectSolution" targetRef="End_DirectlyResolved" />
+    <bpmn:sequenceFlow id="Flow_ToTier2" name="Yes" sourceRef="Gateway_NeedsBugFix" targetRef="Task_InvestigateBug">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">isDefect == true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_FixToDeploy" sourceRef="Task_InvestigateBug" targetRef="Task_DeployHotfix" />
+    <bpmn:sequenceFlow id="Flow_BackToTier1" sourceRef="Task_DeployHotfix" targetRef="Task_VerifyWithCustomer" />
+    <bpmn:sequenceFlow id="Flow_VerifyToEnd" sourceRef="Task_VerifyWithCustomer" targetRef="End_ResolvedWithPatch" />
+  </bpmn:process>
+<bpmndi:BPMNDiagram id="BPMNDiagram_Process_IncidentManagement"><bpmndi:BPMNPlane id="BPMNPlane_Process_IncidentManagement" bpmnElement="Process_IncidentManagement"><bpmndi:BPMNShape id="Lane_Tier1Support_di" bpmnElement="Lane_Tier1Support" isHorizontal="true"><omgdc:Bounds x="0" y="60" width="1250" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Lane_Tier2Engineering_di" bpmnElement="Lane_Tier2Engineering" isHorizontal="true"><omgdc:Bounds x="0" y="420" width="1250" height="360" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Start_IncidentLogged_di" bpmnElement="Start_IncidentLogged"><omgdc:Bounds x="160" y="222" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_TriageIncident_di" bpmnElement="Task_TriageIncident"><omgdc:Bounds x="310" y="200" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_NeedsBugFix_di" bpmnElement="Gateway_NeedsBugFix"><omgdc:Bounds x="460" y="215" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_InvestigateBug_di" bpmnElement="Task_InvestigateBug"><omgdc:Bounds x="610" y="620" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ProvideDirectSolution_di" bpmnElement="Task_ProvideDirectSolution"><omgdc:Bounds x="610" y="140" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_DeployHotfix_di" bpmnElement="Task_DeployHotfix"><omgdc:Bounds x="760" y="620" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_DirectlyResolved_di" bpmnElement="End_DirectlyResolved"><omgdc:Bounds x="760" y="162" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_VerifyWithCustomer_di" bpmnElement="Task_VerifyWithCustomer"><omgdc:Bounds x="910" y="260" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_ResolvedWithPatch_di" bpmnElement="End_ResolvedWithPatch"><omgdc:Bounds x="1060" y="282" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id="Flow_StartToTriage_di" bpmnElement="Flow_StartToTriage"><omgdi:waypoint x="196" y="240" /><omgdi:waypoint x="310" y="240" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_TriageToGateway_di" bpmnElement="Flow_TriageToGateway"><omgdi:waypoint x="410" y="240" /><omgdi:waypoint x="460" y="240" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_Simple_di" bpmnElement="Flow_Simple"><omgdi:waypoint x="510" y="240" /><omgdi:waypoint x="610" y="180" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_DirectToEnd_di" bpmnElement="Flow_DirectToEnd"><omgdi:waypoint x="710" y="180" /><omgdi:waypoint x="760" y="180" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_ToTier2_di" bpmnElement="Flow_ToTier2"><omgdi:waypoint x="510" y="240" /><omgdi:waypoint x="610" y="660" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_FixToDeploy_di" bpmnElement="Flow_FixToDeploy"><omgdi:waypoint x="710" y="660" /><omgdi:waypoint x="760" y="660" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_BackToTier1_di" bpmnElement="Flow_BackToTier1"><omgdi:waypoint x="860" y="660" /><omgdi:waypoint x="910" y="300" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_VerifyToEnd_di" bpmnElement="Flow_VerifyToEnd"><omgdi:waypoint x="1010" y="300" /><omgdi:waypoint x="1060" y="300" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>

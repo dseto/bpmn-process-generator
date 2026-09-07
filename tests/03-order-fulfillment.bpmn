@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_OrderFulfillment" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_OrderFulfillment" name="Order Fulfillment" isExecutable="false">
+    <bpmn:startEvent id="Start_OrderConfirmed" name="Order confirmed">
+      <bpmn:outgoing>Flow_StartToSplit</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:parallelGateway id="Gateway_SplitFulfillment" name="Split tasks">
+      <bpmn:incoming>Flow_StartToSplit</bpmn:incoming>
+      <bpmn:outgoing>Flow_SplitToPayment</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SplitToWarehouse</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:serviceTask id="Task_ProcessPayment" name="Charge payment">
+      <bpmn:incoming>Flow_SplitToPayment</bpmn:incoming>
+      <bpmn:outgoing>Flow_PaymentToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:userTask id="Task_PickWarehouseStock" name="Pick items from warehouse">
+      <bpmn:incoming>Flow_SplitToWarehouse</bpmn:incoming>
+      <bpmn:outgoing>Flow_WarehouseToJoin</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:parallelGateway id="Gateway_JoinFulfillment" name="Synchronize fulfillment">
+      <bpmn:incoming>Flow_PaymentToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_WarehouseToJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_JoinToInvoice</bpmn:outgoing>
+    </bpmn:parallelGateway>
+    <bpmn:serviceTask id="Task_GenerateInvoiceAndShip" name="Generate invoice and dispatch">
+      <bpmn:incoming>Flow_JoinToInvoice</bpmn:incoming>
+      <bpmn:outgoing>Flow_InvoiceToEnd</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_OrderDispatched" name="Order dispatched">
+      <bpmn:incoming>Flow_InvoiceToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_StartToSplit" sourceRef="Start_OrderConfirmed" targetRef="Gateway_SplitFulfillment" />
+    <bpmn:sequenceFlow id="Flow_SplitToPayment" sourceRef="Gateway_SplitFulfillment" targetRef="Task_ProcessPayment" />
+    <bpmn:sequenceFlow id="Flow_SplitToWarehouse" sourceRef="Gateway_SplitFulfillment" targetRef="Task_PickWarehouseStock" />
+    <bpmn:sequenceFlow id="Flow_PaymentToJoin" sourceRef="Task_ProcessPayment" targetRef="Gateway_JoinFulfillment" />
+    <bpmn:sequenceFlow id="Flow_WarehouseToJoin" sourceRef="Task_PickWarehouseStock" targetRef="Gateway_JoinFulfillment" />
+    <bpmn:sequenceFlow id="Flow_JoinToInvoice" sourceRef="Gateway_JoinFulfillment" targetRef="Task_GenerateInvoiceAndShip" />
+    <bpmn:sequenceFlow id="Flow_InvoiceToEnd" sourceRef="Task_GenerateInvoiceAndShip" targetRef="End_OrderDispatched" />
+  </bpmn:process>
+<bpmndi:BPMNDiagram id="BPMNDiagram_Process_OrderFulfillment"><bpmndi:BPMNPlane id="BPMNPlane_Process_OrderFulfillment" bpmnElement="Process_OrderFulfillment"><bpmndi:BPMNShape id="Start_OrderConfirmed_di" bpmnElement="Start_OrderConfirmed"><omgdc:Bounds x="160" y="102" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_SplitFulfillment_di" bpmnElement="Gateway_SplitFulfillment"><omgdc:Bounds x="310" y="95" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_ProcessPayment_di" bpmnElement="Task_ProcessPayment"><omgdc:Bounds x="460" y="20" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_PickWarehouseStock_di" bpmnElement="Task_PickWarehouseStock"><omgdc:Bounds x="460" y="140" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_JoinFulfillment_di" bpmnElement="Gateway_JoinFulfillment"><omgdc:Bounds x="610" y="35" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_GenerateInvoiceAndShip_di" bpmnElement="Task_GenerateInvoiceAndShip"><omgdc:Bounds x="760" y="20" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_OrderDispatched_di" bpmnElement="End_OrderDispatched"><omgdc:Bounds x="910" y="42" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id="Flow_StartToSplit_di" bpmnElement="Flow_StartToSplit"><omgdi:waypoint x="196" y="120" /><omgdi:waypoint x="310" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SplitToPayment_di" bpmnElement="Flow_SplitToPayment"><omgdi:waypoint x="360" y="120" /><omgdi:waypoint x="460" y="60" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_SplitToWarehouse_di" bpmnElement="Flow_SplitToWarehouse"><omgdi:waypoint x="360" y="120" /><omgdi:waypoint x="460" y="180" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_PaymentToJoin_di" bpmnElement="Flow_PaymentToJoin"><omgdi:waypoint x="560" y="60" /><omgdi:waypoint x="610" y="60" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_WarehouseToJoin_di" bpmnElement="Flow_WarehouseToJoin"><omgdi:waypoint x="560" y="180" /><omgdi:waypoint x="610" y="60" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_JoinToInvoice_di" bpmnElement="Flow_JoinToInvoice"><omgdi:waypoint x="660" y="60" /><omgdi:waypoint x="760" y="60" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_InvoiceToEnd_di" bpmnElement="Flow_InvoiceToEnd"><omgdi:waypoint x="860" y="60" /><omgdi:waypoint x="910" y="60" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>

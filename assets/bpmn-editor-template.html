@@ -8,18 +8,27 @@
 <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.0/dist/assets/bpmn-font/css/bpmn.css" />
 <script src="https://unpkg.com/bpmn-js@17.0.0/dist/bpmn-modeler.production.min.js"></script>
 <style>
-  html, body { height: 100%; margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   #toolbar {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 12px; background: #1a1a1a; color: #fff;
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 12px; background: #1a1a1a; color: #fff;
+    overflow-x: auto; white-space: nowrap;
   }
-  #toolbar span { font-size: 13px; opacity: 0.7; margin-left: auto; }
+  #toolbar span.title { font-size: 13px; font-weight: 600; color: #38bdf8; margin-right: 4px; }
+  #toolbar span.proc-name { font-size: 12px; opacity: 0.7; margin-left: auto; }
+  .toolbar-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 2px; }
   button {
     background: #2b6cb0; color: #fff; border: none; border-radius: 4px;
-    padding: 6px 14px; font-size: 13px; cursor: pointer;
+    padding: 5px 10px; font-size: 12px; cursor: pointer; display: inline-flex;
+    align-items: center; gap: 4px; transition: background 0.15s;
   }
   button:hover { background: #2c5282; }
-  #canvas { height: calc(100% - 46px); }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.btn-sec { background: #334155; }
+  button.btn-sec:hover { background: #475569; }
+  button.btn-accent { background: #4338ca; }
+  button.btn-accent:hover { background: #3730a3; }
+  #canvas { height: calc(100% - 42px); }
   #error-banner {
     display: none; background: #c53030; color: #fff; padding: 10px 12px;
     font-size: 13px; white-space: pre-wrap;
@@ -28,9 +37,27 @@
 </head>
 <body>
   <div id="toolbar">
-    <button id="btn-download">Download BPMN</button>
-    <button id="btn-reset">Reset to original</button>
-    <span>PLACEHOLDER_PROCESS_NAME</span>
+    <span class="title">BPMN Editor</span>
+    <button id="btn-download" title="Download BPMN XML">💾 Download</button>
+    <button id="btn-export-svg" class="btn-sec" title="Export SVG vector image">🖼️ SVG</button>
+    <button id="btn-reset" class="btn-sec" title="Reset to original XML">🔄 Reset</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button id="btn-undo" class="btn-sec" title="Undo (Ctrl+Z)" disabled>↩️</button>
+    <button id="btn-redo" class="btn-sec" title="Redo (Ctrl+Y)" disabled>↪️</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button id="btn-route-90" class="btn-accent" title="Align selected connection(s) or all connections to 90-degree orthogonal curves">📐 Curva 90°</button>
+
+    <div class="toolbar-sep"></div>
+
+    <button id="btn-zoom-out" class="btn-sec" title="Zoom Out">➖</button>
+    <button id="btn-zoom-in" class="btn-sec" title="Zoom In">➕</button>
+    <button id="btn-zoom-fit" class="btn-sec" title="Fit to Viewport">🎯 Fit</button>
+
+    <span class="proc-name">PLACEHOLDER_PROCESS_NAME</span>
   </div>
   <div id="error-banner"></div>
   <div id="canvas"></div>
@@ -82,6 +109,8 @@
   const ORIGINAL_BPMN_XML = JSON.parse("PLACEHOLDER_BPMN_XML_JSON");
 
   const errorBanner = document.getElementById('error-banner');
+  const btnUndo = document.getElementById('btn-undo');
+  const btnRedo = document.getElementById('btn-redo');
 
   function showError(err) {
     errorBanner.style.display = 'block';
@@ -102,7 +131,39 @@
     errorBanner.style.display = 'block';
     errorBanner.textContent = 'Could not load the bpmn-js library from the CDN — check your internet connection and reload.';
   } else {
-    const modeler = new BpmnJS({ container: '#canvas', keyboard: { bindTo: document } });
+    // Custom rule module to enable task resizing
+    const CustomResizeModule = {
+      __init__: ['customResizeRules'],
+      customResizeRules: ['type', function(eventBus) {
+        eventBus.on('shape.resize', 1500, function(context) {
+          const shape = context.shape;
+          if (!shape) return;
+          const type = shape.type;
+          if (type && (type.indexOf('Task') !== -1 || type === 'bpmn:Activity' || type === 'bpmn:CallActivity')) {
+            return { min: { width: 80, height: 60 } };
+          }
+        });
+      }]
+    };
+
+    const modeler = new BpmnJS({
+      container: '#canvas',
+      keyboard: { bindTo: document },
+      gridSnapping: { active: true },
+      additionalModules: [
+        CustomResizeModule
+      ]
+    });
+
+    function updateUndoRedo() {
+      try {
+        const cs = modeler.get('commandStack');
+        btnUndo.disabled = !cs.canUndo();
+        btnRedo.disabled = !cs.canRedo();
+      } catch (e) {}
+    }
+
+    modeler.on('commandStack.changed', updateUndoRedo);
 
     async function loadXML(xml) {
       try {
@@ -111,21 +172,11 @@
           console.warn('bpmn-js import warnings:', result.warnings);
         }
         clearError();
+        updateUndoRedo();
       } catch (err) {
         showError(err);
         return;
       }
-      // Fit-to-viewport is cosmetic, not part of import — keep it in its own try/catch
-      // so a zoom failure can never overwrite a successful import with a false "failed
-      // to render" banner. Deferred with setTimeout (NOT requestAnimationFrame — rAF
-      // callbacks are throttled or never fire at all while the tab/page isn't visible,
-      // e.g. a background tab, so a zoom that depends on rAF can hang indefinitely in
-      // that case): calling zoom() in the same tick as the container's first paint can
-      // hit a container size of 0 before the browser has finished laying out #canvas,
-      // which makes bpmn-js compute a non-finite scale and throw ("Failed to execute
-      // 'scale' on 'SVGMatrix': ... non-finite") even though the diagram itself
-      // imported and rendered correctly underneath. A short real-time delay lets
-      // layout settle regardless of tab visibility.
       setTimeout(() => {
         try {
           modeler.get('canvas').zoom('fit-viewport');
@@ -146,8 +197,23 @@
         document.body.appendChild(a);
         a.click();
         a.remove();
-        // Defer revocation: revoking synchronously right after click() can cancel
-        // the download before it actually starts in Firefox and Safari.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        showError(err);
+      }
+    });
+
+    document.getElementById('btn-export-svg').addEventListener('click', async () => {
+      try {
+        const { svg } = await modeler.saveSVG({ format: true });
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'PLACEHOLDER_PROCESS_NAME.svg';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       } catch (err) {
         showError(err);
@@ -155,6 +221,69 @@
     });
 
     document.getElementById('btn-reset').addEventListener('click', () => loadXML(ORIGINAL_BPMN_XML));
+
+    btnUndo.addEventListener('click', () => {
+      try {
+        const cs = modeler.get('commandStack');
+        if (cs.canUndo()) cs.undo();
+      } catch (e) {}
+    });
+
+    btnRedo.addEventListener('click', () => {
+      try {
+        const cs = modeler.get('commandStack');
+        if (cs.canRedo()) cs.redo();
+      } catch (e) {}
+    });
+
+    document.getElementById('btn-route-90').addEventListener('click', () => {
+      try {
+        const selection = modeler.get('selection').get();
+        const modeling = modeler.get('modeling');
+        const connections = selection.filter(el => el.waypoints);
+        if (connections.length > 0) {
+          connections.forEach(conn => modeling.layoutConnection(conn));
+        } else {
+          const elementRegistry = modeler.get('elementRegistry');
+          const allConns = elementRegistry.filter(el => el.waypoints && (el.type === 'bpmn:SequenceFlow' || el.type === 'bpmn:MessageFlow' || el.type === 'bpmn:Association'));
+          allConns.forEach(conn => modeling.layoutConnection(conn));
+        }
+      } catch (err) {
+        showError(err);
+      }
+    });
+
+    document.getElementById('btn-zoom-in').addEventListener('click', () => {
+      try {
+        const canvas = modeler.get('canvas');
+        canvas.zoom(canvas.zoom() * 1.25);
+      } catch (e) {}
+    });
+
+    document.getElementById('btn-zoom-out').addEventListener('click', () => {
+      try {
+        const canvas = modeler.get('canvas');
+        canvas.zoom(canvas.zoom() * 0.8);
+      } catch (e) {}
+    });
+
+    document.getElementById('btn-zoom-fit').addEventListener('click', () => {
+      try {
+        modeler.get('canvas').zoom('fit-viewport');
+      } catch (e) {}
+    });
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+      if (isCtrlOrMeta && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        try { modeler.get('commandStack').undo(); } catch (err) {}
+      } else if (isCtrlOrMeta && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        try { modeler.get('commandStack').redo(); } catch (err) {}
+      }
+    });
 
     loadXML(ORIGINAL_BPMN_XML);
   }

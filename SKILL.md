@@ -88,7 +88,14 @@ O linter verifica automaticamente:
 ### Passo 4: Visualizar e Editar no `editor.html`
 * O usuário abre o [`editor.html`](file:///c:/Projetos/bpmn-process-generator/editor.html) na raiz da skill.
 * Carrega o arquivo gerado via botão **"📂 Abrir .bpmn"** ou arrastando o arquivo para a janela.
-* Ajustes manuais de posicionamento ou rótulos podem ser feitos na tela e salvos diretamente no mesmo arquivo com **`Ctrl+S`**.
+* Recursos avançados de edição disponíveis:
+  * **Redimensionamento de Tarefas**: Arrastar alças de canto para ajustar tamanho de caixas de atividades.
+  * **Roteamento 90°**: Botão **"📐 Curva 90°"** para ortogonalizar conexões diagonais selecionadas ou de todo o processo.
+  * **Alinhamento e Grade**: Encaixe magnético de nós e conexões na grade de 10 px.
+  * **Paleta de Cores**: Personalização de caixas e raias via paleta rápida de cores.
+  * **Histórico e Busca**: `Ctrl+Z` (desfazer), `Ctrl+Y` (refazer) e `Ctrl+F` (localizar nós no diagrama).
+  * **Exportação Gráfica**: Geração de imagens vetoriais (SVG) e rasterizadas em alta resolução (PNG 2x).
+* Ajustes manuais são gravados diretamente no disco com **`Ctrl+S`**.
 * *(Opcional)* Se for solicitada a exportação de um HTML avulso autocontido:
   ```powershell
   python scripts/build_editor.py <caminho>/<processo>.bpmn -o <caminho>/<processo>.html -s <processo>
@@ -108,11 +115,32 @@ Todos os scripts operam com a biblioteca padrão do Python 3 (sem necessidade de
 | [`scripts/bpmn_tool.py`](file:///c:/Projetos/bpmn-process-generator/scripts/bpmn_tool.py) | Calcula layout gráfico (DI) e valida integridade semântica do grafo. | `python scripts/bpmn_tool.py layout proc.bpmn`<br>`python scripts/bpmn_tool.py validate proc.bpmn` |
 | [`scripts/build_editor.py`](file:///c:/Projetos/bpmn-process-generator/scripts/build_editor.py) | Empacota um `.bpmn` dentro do template HTML avulso usando dupla codificação JSON segura. | `python scripts/build_editor.py proc.bpmn -o proc.html` |
 | [`scripts/generate_editor_html.py`](file:///c:/Projetos/bpmn-process-generator/scripts/generate_editor_html.py) | Regenera o [`editor.html`](file:///c:/Projetos/bpmn-process-generator/editor.html) central embutindo os presets mais recentes. | `python scripts/generate_editor_html.py` |
+| [`scripts/verify_tests.py`](file:///c:/Projetos/bpmn-process-generator/scripts/verify_tests.py) | Suíte CLI de validação dos processos BPMN de teste e integridade de DI/HTML. | `python scripts/verify_tests.py` |
 
 ---
 
-## 5. Governança e Controle de Versão
+## 5. Testes e Garantia de Qualidade
+
+A suíte de testes pode ser executada via **pytest** a partir da raiz do repositório:
+
+```powershell
+# Executar todos os testes automatizados com saída detalhada
+pytest -v
+
+# Ou executar o verificador direto
+python scripts/verify_tests.py
+```
+
+A suíte cobre:
+1. Validação estrutural de grafo e sintaxe XML de todos os 6 modelos de teste (`tests/01` a `tests/06`).
+2. Integridade de Diagram Interchange (BPMNDI) e limites de nós/arestas.
+3. Empacotamento HTML, dupla decodificação JSON caractere a caractere e contrato contra injeção de script tags.
+4. Linter e cálculo de layout do `bpmn_tool.py`, incluindo validações de casos canônicos quebrados e completos.
+
+---
+
+## 6. Governança e Controle de Versão
 
 O repositório adota política rígida de controle com Git através do [`.gitignore`](file:///c:/Projetos/bpmn-process-generator/.gitignore):
-* Apenas o código-fonte da skill e seus exemplos canônicos são rastreados.
-* Pastas de testes locais (`tests/`), scripts de verificação interna (`scripts/verify_tests.py`), caches Python (`__pycache__`), arquivos do harness (`.harness/scratch/`) e configurações locais (`.claude/`) são automaticamente ignorados.
+* O código-fonte da skill, os scripts utilitários, os exemplos canônicos e a suíte de testes (`tests/`) são versionados.
+* Arquivos HTML gerados dinamicamente (`tests/*.html`, `test-output*.html`), caches Python (`__pycache__`, `.pytest_cache`), arquivos do harness (`.harness/scratch/`) e configurações locais (`.claude/`) são automaticamente ignorados.

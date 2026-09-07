@@ -10,9 +10,8 @@ __pycache__/
 .pytest_cache/
 
 # Testes locais e artefatos de teste
-tests/
 test-output*.html
-scripts/verify_tests.py
+tests/*.html
 
 # Arquivos HTML gerados dinamicamente (preserva o editor central e o template)
 *.html

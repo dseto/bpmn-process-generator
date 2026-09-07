@@ -1,0 +1,41 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_CreditCardApproval" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_CreditCardApproval" name="Credit Card Approval" isExecutable="false">
+    <bpmn:startEvent id="Start_ApplicationReceived" name="Application received">
+      <bpmn:outgoing>Flow_StartToCheck</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:serviceTask id="Task_CheckCreditScore" name="Check credit score in bureau">
+      <bpmn:incoming>Flow_StartToCheck</bpmn:incoming>
+      <bpmn:outgoing>Flow_CheckToGateway</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:exclusiveGateway id="Gateway_ScoreEvaluation" name="Score &gt;= 700?">
+      <bpmn:incoming>Flow_CheckToGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Rejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_IssueCard" name="Issue credit card">
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:outgoing>Flow_CardToDone</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_CardIssued" name="Card issued and approved">
+      <bpmn:incoming>Flow_CardToDone</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:serviceTask id="Task_SendRejectionNotice" name="Send rejection notification">
+      <bpmn:incoming>Flow_Rejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_NoticeToRejected</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="End_ApplicationRejected" name="Application rejected">
+      <bpmn:incoming>Flow_NoticeToRejected</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_StartToCheck" sourceRef="Start_ApplicationReceived" targetRef="Task_CheckCreditScore" />
+    <bpmn:sequenceFlow id="Flow_CheckToGateway" sourceRef="Task_CheckCreditScore" targetRef="Gateway_ScoreEvaluation" />
+    <bpmn:sequenceFlow id="Flow_Approved" name="Yes (score &gt;= 700)" sourceRef="Gateway_ScoreEvaluation" targetRef="Task_IssueCard">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${score &gt;= 700}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Rejected" name="No (score &lt; 700)" sourceRef="Gateway_ScoreEvaluation" targetRef="Task_SendRejectionNotice">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${score &lt; 700}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_CardToDone" sourceRef="Task_IssueCard" targetRef="End_CardIssued" />
+    <bpmn:sequenceFlow id="Flow_NoticeToRejected" sourceRef="Task_SendRejectionNotice" targetRef="End_ApplicationRejected" />
+  </bpmn:process>
+<bpmndi:BPMNDiagram id="BPMNDiagram_Process_CreditCardApproval"><bpmndi:BPMNPlane id="BPMNPlane_Process_CreditCardApproval" bpmnElement="Process_CreditCardApproval"><bpmndi:BPMNShape id="Start_ApplicationReceived_di" bpmnElement="Start_ApplicationReceived"><omgdc:Bounds x="160" y="102" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_CheckCreditScore_di" bpmnElement="Task_CheckCreditScore"><omgdc:Bounds x="310" y="80" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Gateway_ScoreEvaluation_di" bpmnElement="Gateway_ScoreEvaluation"><omgdc:Bounds x="460" y="95" width="50" height="50" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_SendRejectionNotice_di" bpmnElement="Task_SendRejectionNotice"><omgdc:Bounds x="610" y="140" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="Task_IssueCard_di" bpmnElement="Task_IssueCard"><omgdc:Bounds x="610" y="20" width="100" height="80" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_ApplicationRejected_di" bpmnElement="End_ApplicationRejected"><omgdc:Bounds x="760" y="162" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNShape id="End_CardIssued_di" bpmnElement="End_CardIssued"><omgdc:Bounds x="760" y="42" width="36" height="36" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id="Flow_StartToCheck_di" bpmnElement="Flow_StartToCheck"><omgdi:waypoint x="196" y="120" /><omgdi:waypoint x="310" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_CheckToGateway_di" bpmnElement="Flow_CheckToGateway"><omgdi:waypoint x="410" y="120" /><omgdi:waypoint x="460" y="120" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_Approved_di" bpmnElement="Flow_Approved"><omgdi:waypoint x="510" y="120" /><omgdi:waypoint x="610" y="60" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_Rejected_di" bpmnElement="Flow_Rejected"><omgdi:waypoint x="510" y="120" /><omgdi:waypoint x="610" y="180" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_CardToDone_di" bpmnElement="Flow_CardToDone"><omgdi:waypoint x="710" y="60" /><omgdi:waypoint x="760" y="60" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id="Flow_NoticeToRejected_di" bpmnElement="Flow_NoticeToRejected"><omgdi:waypoint x="710" y="180" /><omgdi:waypoint x="760" y="180" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>

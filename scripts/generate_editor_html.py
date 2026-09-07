@@ -4,6 +4,16 @@ generate_editor_html.py
 Generates the central editor.html in the root directory.
 Includes File System Access API, Drag & Drop, Keyboard shortcuts, and embeds presets
 so the editor works seamlessly under file:// protocol without CORS fetch blocks.
+
+Enhanced with:
+- Task resizing (CustomResizeModule)
+- 90-degree orthogonal line routing (layoutConnection)
+- Magnetic grid snapping (10px grid)
+- Color palette (bioc coloring via modeling.setColor)
+- Visual Undo/Redo history
+- Zoom controls and canvas fit
+- In-diagram SearchPad (Ctrl+F)
+- High-resolution PNG and vector SVG exports
 """
 import json
 from pathlib import Path
@@ -83,10 +93,20 @@ html_content = f"""<!DOCTYPE html>
     border-bottom: 1px solid var(--bg-header-border);
     display: flex;
     align-items: center;
-    padding: 0 16px;
-    gap: 12px;
+    padding: 0 14px;
+    gap: 8px;
     color: var(--text-light);
     user-select: none;
+    overflow-x: auto;
+    white-space: nowrap;
+  }}
+
+  #app-header::-webkit-scrollbar {{
+    height: 4px;
+  }}
+  #app-header::-webkit-scrollbar-thumb {{
+    background: #334155;
+    border-radius: 2px;
   }}
 
   .brand {{
@@ -97,7 +117,8 @@ html_content = f"""<!DOCTYPE html>
     font-size: 15px;
     letter-spacing: 0.3px;
     color: #38bdf8;
-    margin-right: 8px;
+    margin-right: 4px;
+    flex-shrink: 0;
   }}
 
   .brand svg {{
@@ -109,7 +130,16 @@ html_content = f"""<!DOCTYPE html>
   .button-group {{
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+    flex-shrink: 0;
+  }}
+
+  .toolbar-sep {{
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.12);
+    margin: 0 2px;
+    flex-shrink: 0;
   }}
 
   button, select {{
@@ -117,18 +147,25 @@ html_content = f"""<!DOCTYPE html>
     color: var(--text-light);
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px;
-    padding: 7px 12px;
-    font-size: 13px;
+    padding: 6px 10px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     transition: all 0.15s ease-in-out;
+    white-space: nowrap;
   }}
 
   button:hover {{
     background: var(--btn-secondary-hover);
+  }}
+
+  button:disabled {{
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
   }}
 
   button.btn-save {{
@@ -145,10 +182,50 @@ html_content = f"""<!DOCTYPE html>
     background: var(--btn-primary-hover);
   }}
 
+  button.btn-action {{
+    background: #4338ca;
+  }}
+  button.btn-action:hover {{
+    background: #3730a3;
+  }}
+
   select {{
-    padding-right: 28px;
+    padding-right: 24px;
     background-color: #1e293b;
     outline: none;
+    font-size: 12px;
+  }}
+
+  /* Color Picker Palettes */
+  .color-picker-group {{
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #1e293b;
+    padding: 3px 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.08);
+    flex-shrink: 0;
+  }}
+
+  .color-label {{
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-right: 2px;
+  }}
+
+  .color-dot {{
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid rgba(255,255,255,0.25);
+    transition: transform 0.15s ease, border-color 0.15s ease;
+  }}
+  .color-dot:hover {{
+    transform: scale(1.3);
+    border-color: #ffffff;
+    box-shadow: 0 0 6px rgba(255,255,255,0.4);
   }}
 
   .file-badge {{
@@ -162,6 +239,7 @@ html_content = f"""<!DOCTYPE html>
     font-size: 12px;
     color: var(--text-muted);
     border: 1px solid rgba(255,255,255,0.05);
+    flex-shrink: 0;
   }}
 
   .file-badge strong {{
@@ -250,16 +328,17 @@ html_content = f"""<!DOCTYPE html>
 <body>
 
 <header id="app-header">
-  <div class="brand">
+  <div class="brand" title="BPMN Editor Central — Modelador Visual Interativo">
     <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
     BPMN Editor
   </div>
 
+  <!-- Grupo Arquivo -->
   <div class="button-group">
-    <button id="btn-open" class="btn-primary" title="Abrir arquivo do computador (Ctrl+O)">
-      📂 Abrir .bpmn
+    <button id="btn-open" class="btn-primary" title="Abrir arquivo .bpmn do computador (Ctrl+O)">
+      📂 Abrir
     </button>
-    <button id="btn-save" class="btn-save" title="Salvar no mesmo arquivo do disco (Ctrl+S)">
+    <button id="btn-save" class="btn-save" title="Salvar diretamente no arquivo do disco (Ctrl+S)">
       💾 Salvar
     </button>
     <button id="btn-save-as" title="Salvar como novo arquivo ou download">
@@ -270,8 +349,79 @@ html_content = f"""<!DOCTYPE html>
     </button>
   </div>
 
-  <div class="button-group" style="margin-left: 8px;">
-    <select id="preset-select" title="Carregar um diagrama de teste ou exemplo">
+  <div class="toolbar-sep"></div>
+
+  <!-- Grupo Histórico (Undo / Redo) -->
+  <div class="button-group">
+    <button id="btn-undo" title="Desfazer última ação (Ctrl+Z)" disabled>
+      ↩️
+    </button>
+    <button id="btn-redo" title="Refazer ação (Ctrl+Y)" disabled>
+      ↪️
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <!-- Grupo Geometria & Roteamento -->
+  <div class="button-group">
+    <button id="btn-route-90" class="btn-action" title="Alinhar conexões selecionadas (ou todas) em ângulos ortogonais de 90°">
+      📐 Curva 90°
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <!-- Grupo Paleta de Cores -->
+  <div class="color-picker-group" title="Selecione nós ou caixas e clique numa cor para personalizar">
+    <span class="color-label">Cores:</span>
+    <div class="color-dot" style="background:#ffffff;" data-fill="#ffffff" data-stroke="#22242a" title="Padrão (Branco)"></div>
+    <div class="color-dot" style="background:#38bdf8;" data-fill="#e0f2fe" data-stroke="#0284c7" title="Azul"></div>
+    <div class="color-dot" style="background:#4ade80;" data-fill="#dcfce7" data-stroke="#16a34a" title="Verde"></div>
+    <div class="color-dot" style="background:#facc15;" data-fill="#fef9c3" data-stroke="#ca8a04" title="Amarelo"></div>
+    <div class="color-dot" style="background:#f87171;" data-fill="#fee2e2" data-stroke="#dc2626" title="Vermelho"></div>
+    <div class="color-dot" style="background:#c084fc;" data-fill="#f3e8ff" data-stroke="#9333ea" title="Roxo"></div>
+    <div class="color-dot" style="background:#fb923c;" data-fill="#ffedd5" data-stroke="#ea580c" title="Laranja"></div>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <!-- Grupo Visualização & Zoom -->
+  <div class="button-group">
+    <button id="btn-search" title="Localizar elementos no diagrama (Ctrl+F)">
+      🔍
+    </button>
+    <button id="btn-zoom-out" title="Diminuir zoom">
+      ➖
+    </button>
+    <button id="btn-zoom-in" title="Aumentar zoom">
+      ➕
+    </button>
+    <button id="btn-zoom-fit" title="Ajustar diagrama à tela">
+      🎯
+    </button>
+    <button id="btn-zoom-reset" title="Zoom 100% (1:1)">
+      1:1
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <!-- Grupo Exportação Gráfica -->
+  <div class="button-group">
+    <button id="btn-export-svg" title="Exportar imagem vetorial (.svg)">
+      🖼️ SVG
+    </button>
+    <button id="btn-export-png" title="Exportar imagem em alta resolução (.png)">
+      📷 PNG
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <!-- Seletor de Presets -->
+  <div class="button-group">
+    <select id="preset-select" title="Carregar um diagrama de teste ou exemplo integrado">
       <option value="">-- Exemplos / Testes --</option>
       <option value="06-bus-boarding-process.bpmn">06. Ônibus Completo (4 Raias)</option>
       <option value="04-incident-management.bpmn">04. Gestão de Incidentes (2 Raias)</option>
@@ -283,6 +433,7 @@ html_content = f"""<!DOCTYPE html>
     </select>
   </div>
 
+  <!-- Badge de Status do Arquivo -->
   <div class="file-badge">
     <div id="status-dot" class="status-dot" title="Arquivo sincronizado com o disco"></div>
     <span id="current-filename">Nenhum arquivo</span>
@@ -316,6 +467,8 @@ html_content = f"""<!DOCTYPE html>
   const fileInput = document.getElementById('file-input');
   const presetSelect = document.getElementById('preset-select');
   const dropOverlay = document.getElementById('drop-overlay');
+  const btnUndo = document.getElementById('btn-undo');
+  const btnRedo = document.getElementById('btn-redo');
 
   function showToast(msg) {{
     toast.textContent = msg;
@@ -348,17 +501,50 @@ html_content = f"""<!DOCTYPE html>
     }}
   }}
 
+  function updateUndoRedoState() {{
+    if (!modeler) return;
+    try {{
+      const cs = modeler.get('commandStack');
+      btnUndo.disabled = !cs.canUndo();
+      btnRedo.disabled = !cs.canRedo();
+    }} catch (e) {{}}
+  }}
+
+  // Módulo de regras customizadas para permitir redimensionamento de tarefas (Task Resize)
+  const CustomResizeModule = {{
+    __init__: ['customResizeRules'],
+    customResizeRules: ['type', function(eventBus) {{
+      // Prioridade 1500 executa antes da regra padrão do bpmn-js (prioridade 1000)
+      eventBus.on('shape.resize', 1500, function(context) {{
+        const shape = context.shape;
+        if (!shape) return;
+        const type = shape.type;
+        // Permite redimensionar qualquer subtipo de Task ou Activity mantendo limite mínimo seguro
+        if (type && (type.indexOf('Task') !== -1 || type === 'bpmn:Activity' || type === 'bpmn:CallActivity')) {{
+          return {{
+            min: {{ width: 80, height: 60 }}
+          }};
+        }}
+      }});
+    }}]
+  }};
+
   if (typeof BpmnJS === 'undefined') {{
     showError('Não foi possível carregar a biblioteca bpmn-js do CDN. Verifique sua conexão com a internet.');
   }} else {{
     modeler = new BpmnJS({{
       container: '#canvas',
-      keyboard: {{ bindTo: document }}
+      keyboard: {{ bindTo: document }},
+      gridSnapping: {{ active: true }},
+      additionalModules: [
+        CustomResizeModule
+      ]
     }});
 
-    // Listen for model changes to flag dirty state
+    // Atualiza estado de alteração e botões de undo/redo
     modeler.on('commandStack.changed', () => {{
       if (!isDirty) setFileState(currentFileName, currentFileHandle, true);
+      updateUndoRedoState();
     }});
 
     async function loadXML(xml, name = "diagrama.bpmn", handle = null) {{
@@ -366,6 +552,7 @@ html_content = f"""<!DOCTYPE html>
         clearError();
         await modeler.importXML(xml);
         setFileState(name, handle, false);
+        updateUndoRedoState();
         setTimeout(() => {{
           try {{ modeler.get('canvas').zoom('fit-viewport'); }} catch (e) {{}}
         }}, 100);
@@ -473,11 +660,194 @@ html_content = f"""<!DOCTYPE html>
       loadXML(PRESETS['_blank'], 'novo-processo.bpmn', null);
     }}
 
+    // Alinhamento Ortogonal 90° de Conexões
+    function layoutOrthogonalRoute() {{
+      try {{
+        const selection = modeler.get('selection').get();
+        const modeling = modeler.get('modeling');
+        const connections = selection.filter(el => el.waypoints);
+
+        if (connections.length > 0) {{
+          connections.forEach(conn => modeling.layoutConnection(conn));
+          showToast(`${{connections.length}} conexão(ões) recalculada(s) em curvas de 90°!`);
+        }} else {{
+          const elementRegistry = modeler.get('elementRegistry');
+          const allConns = elementRegistry.filter(el => el.waypoints && (el.type === 'bpmn:SequenceFlow' || el.type === 'bpmn:MessageFlow' || el.type === 'bpmn:Association'));
+          if (allConns.length === 0) {{
+            showToast('Nenhuma conexão encontrada para alinhar.');
+            return;
+          }}
+          allConns.forEach(conn => modeling.layoutConnection(conn));
+          showToast(`Todas as ${{allConns.length}} conexões foram alinhadas em 90°!`);
+        }}
+      }} catch (err) {{
+        showError('Erro ao calcular rota ortogonal: ' + err.message);
+      }}
+    }}
+
+    // Aplicação de Cores
+    function applyColor(fill, stroke) {{
+      try {{
+        const selection = modeler.get('selection').get();
+        if (!selection || selection.length === 0) {{
+          showToast('Selecione um ou mais elementos para aplicar a cor.');
+          return;
+        }}
+        const modeling = modeler.get('modeling');
+        modeling.setColor(selection, {{ fill, stroke }});
+        showToast(`Cor aplicada a ${{selection.length}} elemento(s).`);
+      }} catch (err) {{
+        showError('Erro ao aplicar cor: ' + err.message);
+      }}
+    }}
+
+    // Desfazer / Refazer
+    function undoAction() {{
+      try {{
+        const cs = modeler.get('commandStack');
+        if (cs.canUndo()) cs.undo();
+      }} catch (e) {{}}
+    }}
+
+    function redoAction() {{
+      try {{
+        const cs = modeler.get('commandStack');
+        if (cs.canRedo()) cs.redo();
+      }} catch (e) {{}}
+    }}
+
+    // Controles de Zoom
+    function zoomIn() {{
+      try {{
+        const canvas = modeler.get('canvas');
+        canvas.zoom(canvas.zoom() * 1.25);
+      }} catch (e) {{}}
+    }}
+
+    function zoomOut() {{
+      try {{
+        const canvas = modeler.get('canvas');
+        canvas.zoom(canvas.zoom() * 0.8);
+      }} catch (e) {{}}
+    }}
+
+    function zoomFit() {{
+      try {{
+        modeler.get('canvas').zoom('fit-viewport');
+      }} catch (e) {{}}
+    }}
+
+    function zoomReset() {{
+      try {{
+        modeler.get('canvas').zoom(1.0);
+      }} catch (e) {{}}
+    }}
+
+    // Busca no Diagrama (SearchPad)
+    function toggleSearch() {{
+      try {{
+        const searchPad = modeler.get('searchPad');
+        if (searchPad) {{
+          searchPad.toggle();
+        }}
+      }} catch (e) {{
+        console.warn('SearchPad não disponível:', e);
+      }}
+    }}
+
+    // Exportação SVG
+    async function exportSVG() {{
+      try {{
+        const {{ svg }} = await modeler.saveSVG({{ format: true }});
+        const blob = new Blob([svg], {{ type: 'image/svg+xml;charset=utf-8' }});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const baseName = currentFileName.replace(/\\.(bpmn|xml)$/i, '');
+        a.download = `${{baseName}}.svg`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(`Diagrama vetorial '${{baseName}}.svg' exportado!`);
+      }} catch (err) {{
+        showError('Falha ao exportar SVG: ' + err.message);
+      }}
+    }}
+
+    // Exportação PNG em Alta Resolução (2x retina)
+    async function exportPNG() {{
+      try {{
+        const {{ svg }} = await modeler.saveSVG();
+        const img = new Image();
+        const svgBlob = new Blob([svg], {{ type: 'image/svg+xml;charset=utf-8' }});
+        const url = URL.createObjectURL(svgBlob);
+
+        img.onload = () => {{
+          try {{
+            const canvas = document.createElement('canvas');
+            const scale = 2;
+            canvas.width = (img.naturalWidth || img.width || 1200) * scale;
+            canvas.height = (img.naturalHeight || img.height || 800) * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            URL.revokeObjectURL(url);
+
+            canvas.toBlob((pngBlob) => {{
+              const pngUrl = URL.createObjectURL(pngBlob);
+              const a = document.createElement('a');
+              a.href = pngUrl;
+              const baseName = currentFileName.replace(/\\.(bpmn|xml)$/i, '');
+              a.download = `${{baseName}}.png`;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              setTimeout(() => URL.revokeObjectURL(pngUrl), 1000);
+              showToast(`Imagem PNG de alta resolução '${{baseName}}.png' exportada!`);
+            }}, 'image/png');
+          }} catch (e) {{
+            URL.revokeObjectURL(url);
+            showError('Falha ao gerar PNG: ' + e.message);
+          }}
+        }};
+
+        img.onerror = () => {{
+          URL.revokeObjectURL(url);
+          showError('Falha ao renderizar vetor para PNG.');
+        }};
+
+        img.src = url;
+      }} catch (err) {{
+        showError('Falha ao exportar PNG: ' + err.message);
+      }}
+    }}
+
     // Eventos da Toolbar
     document.getElementById('btn-open').addEventListener('click', openFile);
     document.getElementById('btn-save').addEventListener('click', saveFile);
     document.getElementById('btn-save-as').addEventListener('click', saveFileAs);
     document.getElementById('btn-new').addEventListener('click', newDiagram);
+    btnUndo.addEventListener('click', undoAction);
+    btnRedo.addEventListener('click', redoAction);
+    document.getElementById('btn-route-90').addEventListener('click', layoutOrthogonalRoute);
+    document.getElementById('btn-search').addEventListener('click', toggleSearch);
+    document.getElementById('btn-zoom-out').addEventListener('click', zoomOut);
+    document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
+    document.getElementById('btn-zoom-fit').addEventListener('click', zoomFit);
+    document.getElementById('btn-zoom-reset').addEventListener('click', zoomReset);
+    document.getElementById('btn-export-svg').addEventListener('click', exportSVG);
+    document.getElementById('btn-export-png').addEventListener('click', exportPNG);
+
+    // Eventos de Cores
+    document.querySelectorAll('.color-dot').forEach(dot => {{
+      dot.addEventListener('click', () => {{
+        const fill = dot.getAttribute('data-fill');
+        const stroke = dot.getAttribute('data-stroke');
+        applyColor(fill, stroke);
+      }});
+    }});
 
     // Seletor de Presets
     presetSelect.addEventListener('change', (e) => {{
@@ -517,14 +887,24 @@ html_content = f"""<!DOCTYPE html>
       }}
     }});
 
-    // Atalhos de teclado (Ctrl+O, Ctrl+S)
+    // Atalhos de teclado (Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Y, Ctrl+F)
     window.addEventListener('keydown', (e) => {{
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {{
+      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
+      if (isCtrlOrMeta && e.key.toLowerCase() === 's') {{
         e.preventDefault();
         saveFile();
-      }} else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {{
+      }} else if (isCtrlOrMeta && e.key.toLowerCase() === 'o') {{
         e.preventDefault();
         openFile();
+      }} else if (isCtrlOrMeta && e.key.toLowerCase() === 'z' && !e.shiftKey) {{
+        e.preventDefault();
+        undoAction();
+      }} else if (isCtrlOrMeta && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {{
+        e.preventDefault();
+        redoAction();
+      }} else if (isCtrlOrMeta && e.key.toLowerCase() === 'f') {{
+        e.preventDefault();
+        toggleSearch();
       }}
     }});
 
@@ -540,6 +920,11 @@ html_content = f"""<!DOCTYPE html>
 </html>
 """
 
-output_path = ROOT_DIR / "editor.html"
-output_path.write_text(html_content, encoding="utf-8")
-print(f"[OK] Generated central editor at: {output_path} ({len(html_content)} bytes)")
+def main():
+    output_path = ROOT_DIR / "editor.html"
+    output_path.write_text(html_content, encoding="utf-8")
+    print(f"[OK] Generated central editor at: {output_path} ({len(html_content)} bytes)")
+
+
+if __name__ == "__main__":
+    main()
