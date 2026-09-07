@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>BPMN Editor — PLACEHOLDER_PROCESS_NAME</title>
+<!-- Pinned version — do not switch to @latest. Bump this string deliberately if a newer bpmn-js is needed. -->
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.0/dist/assets/diagram-js.css" />
+<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.0/dist/assets/bpmn-font/css/bpmn.css" />
+<script src="https://unpkg.com/bpmn-js@17.0.0/dist/bpmn-modeler.production.min.js"></script>
+<style>
+  html, body { height: 100%; margin: 0; font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  #toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; background: #1a1a1a; color: #fff;
+  }
+  #toolbar span { font-size: 13px; opacity: 0.7; margin-left: auto; }
+  button {
+    background: #2b6cb0; color: #fff; border: none; border-radius: 4px;
+    padding: 6px 14px; font-size: 13px; cursor: pointer;
+  }
+  button:hover { background: #2c5282; }
+  #canvas { height: calc(100% - 46px); }
+  #error-banner {
+    display: none; background: #c53030; color: #fff; padding: 10px 12px;
+    font-size: 13px; white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="btn-download">Download BPMN</button>
+    <button id="btn-reset">Reset to original</button>
+    <span>PLACEHOLDER_PROCESS_NAME</span>
+  </div>
+  <div id="error-banner"></div>
+  <div id="canvas"></div>
+
+<script>
+  // The generated .bpmn file's XML, embedded so this HTML keeps working even if
+  // separated from the original .bpmn file. Regenerate this file if the source changes.
+  //
+  // ENCODING CONTRACT for whatever generates this file — read carefully, this is DOUBLE
+  // JSON-encoded on purpose, a single encoding is NOT enough (see note below):
+  //
+  //   1. innerJson  = JSON.stringify(xmlString)
+  //   2. outerJson  = JSON.stringify(innerJson)
+  //   3. content    = outerJson with its own leading/trailing '"' delimiter characters
+  //                   stripped (outerJson always starts and ends with an unescaped '"',
+  //                   so a plain slice(1, -1) is always safe here)
+  //   4. content    = content with every "</script" substring (case-insensitive) replaced
+  //                   with "<\/script"
+  //   5. Substitute `content` for the PLACEHOLDER_BPMN_XML_JSON token below, IN PLACE —
+  //      do not touch the surrounding "..." on this line, they stay as-is.
+  //
+  // Why a template literal (backtick string) is not safe: real BPMN XML routinely contains
+  // ${expression} syntax (standard Camunda/Flowable conditionExpression syntax), literal
+  // backticks (e.g. in bpmn:documentation text), and potentially a literal script-closing
+  // tag sequence (also possible inside documentation text) — any one of those inside a
+  // template literal either throws a JS ReferenceError/SyntaxError or ends this whole
+  // element's raw text early, producing a blank page.
+  //
+  // CAUTION FOR ANYONE EDITING THIS COMMENT BLOCK ITSELF: never spell out the literal
+  // angle-bracket tag sequence for "closing script tag" or "opening script tag" in here —
+  // the HTML tokenizer matches those character sequences inside this element's raw text
+  // regardless of them being inside a JS comment, and will split this element into multiple
+  // fragments, silently orphaning every real line of code below as inert unexecuted text.
+  // (This exact mistake shipped once already and was caught by an end-to-end browser test,
+  // not by reading the source — reading it looks fine. Only opening the rendered file in an
+  // actual browser reveals the split. If you must reference that tag sequence, break it up,
+  // e.g. spell it with a non-adjacent character in between, the way the JSON-escaping logic
+  // above already has to for the same reason.)
+  //
+  // Why DOUBLE encoding, not a single JSON.stringify(xmlString) dropped straight into the
+  // JSON.parse("...") call below: a single JSON.stringify(xmlString) already consumes its
+  // own delimiting quotes when the JS engine parses the surrounding "..." string literal —
+  // by the time that literal is decoded, the result is xmlString itself with no quoting left,
+  // and JSON.parse() on that raw text throws ("is not valid JSON"). Encoding twice means the
+  // JS engine's string-literal decoding only peels off the OUTER layer, leaving a properly
+  // quoted JSON string for JSON.parse() to decode into xmlString at runtime. (Verified via a
+  // real browser test: a single encoding throws a SyntaxError; the double encoding above
+  // round-trips a test string containing a backtick and a ${foo} sequence correctly.)
+  const ORIGINAL_BPMN_XML = JSON.parse("PLACEHOLDER_BPMN_XML_JSON");
+
+  const errorBanner = document.getElementById('error-banner');
+
+  function showError(err) {
+    errorBanner.style.display = 'block';
+    errorBanner.textContent = 'Failed to render diagram: ' + (err && err.message ? err.message : err);
+  }
+
+  function clearError() {
+    errorBanner.style.display = 'none';
+    errorBanner.textContent = '';
+  }
+
+  // Guard against the CDN failing to load (offline, corporate proxy, transient CDN
+  // issue). Without this, `new BpmnJS(...)` below would throw a raw ReferenceError
+  // before the error-banner machinery ever runs, leaving a silent blank page instead
+  // of a helpful message. We show the message and stop here (no throw) so the rest
+  // of the page — toolbar, banner — stays intact and readable.
+  if (typeof BpmnJS === 'undefined') {
+    errorBanner.style.display = 'block';
+    errorBanner.textContent = 'Could not load the bpmn-js library from the CDN — check your internet connection and reload.';
+  } else {
+    const modeler = new BpmnJS({ container: '#canvas', keyboard: { bindTo: document } });
+
+    async function loadXML(xml) {
+      try {
+        const result = await modeler.importXML(xml);
+        if (result.warnings && result.warnings.length) {
+          console.warn('bpmn-js import warnings:', result.warnings);
+        }
+        clearError();
+      } catch (err) {
+        showError(err);
+        return;
+      }
+      // Fit-to-viewport is cosmetic, not part of import — keep it in its own try/catch
+      // so a zoom failure can never overwrite a successful import with a false "failed
+      // to render" banner. Deferred with setTimeout (NOT requestAnimationFrame — rAF
+      // callbacks are throttled or never fire at all while the tab/page isn't visible,
+      // e.g. a background tab, so a zoom that depends on rAF can hang indefinitely in
+      // that case): calling zoom() in the same tick as the container's first paint can
+      // hit a container size of 0 before the browser has finished laying out #canvas,
+      // which makes bpmn-js compute a non-finite scale and throw ("Failed to execute
+      // 'scale' on 'SVGMatrix': ... non-finite") even though the diagram itself
+      // imported and rendered correctly underneath. A short real-time delay lets
+      // layout settle regardless of tab visibility.
+      setTimeout(() => {
+        try {
+          modeler.get('canvas').zoom('fit-viewport');
+        } catch (err) {
+          console.warn('fit-viewport failed (diagram still imported correctly):', err);
+        }
+      }, 100);
+    }
+
+    document.getElementById('btn-download').addEventListener('click', async () => {
+      try {
+        const { xml } = await modeler.saveXML({ format: true });
+        const blob = new Blob([xml], { type: 'application/xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'PLACEHOLDER_PROCESS_NAME.bpmn';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // Defer revocation: revoking synchronously right after click() can cancel
+        // the download before it actually starts in Firefox and Safari.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (err) {
+        showError(err);
+      }
+    });
+
+    document.getElementById('btn-reset').addEventListener('click', () => loadXML(ORIGINAL_BPMN_XML));
+
+    loadXML(ORIGINAL_BPMN_XML);
+  }
+</script>
+</body>
+</html>

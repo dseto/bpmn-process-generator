@@ -1,0 +1,37 @@
+# ==============================================================================
+# .gitignore - BPMN Process Generator Skill
+# Garante que apenas o mínimo necessário para a skill seja versionado no Git.
+# ==============================================================================
+
+# Python bytecode e caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Testes locais e artefatos de teste
+tests/
+test-output*.html
+scripts/verify_tests.py
+
+# Arquivos HTML gerados dinamicamente (preserva o editor central e o template)
+*.html
+!editor.html
+!assets/bpmn-editor-template.html
+
+# Configurações locais de IDEs e editores
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Configurações locais de agentes e harness
+.claude/
+.harness/scratch/
+.harness/compiled-state-session.json
+
+# Arquivos do Sistema Operacional
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini

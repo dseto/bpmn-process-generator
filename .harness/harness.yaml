@@ -1,0 +1,11 @@
+governance:
+  approval_policy: auto
+  budget:
+    max_tokens_per_task: 500000
+    max_tool_calls_per_task: 120
+
+  extra_allowed_commands:
+    - python -m harness.cli
+    - env:PYTHONPATH =
+verification:
+  enforce_tdd: false
