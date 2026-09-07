@@ -1,67 +1,118 @@
 ---
 name: bpmn-process-generator
-description: Generates valid BPMN 2.0 process diagrams (.bpmn XML) from a natural-language description of a business process, and packages them with a standalone HTML editor that embeds the bpmn-js Modeler (via CDN) so the diagram opens ready-to-edit in any browser, no server or install required. Use this skill whenever the user describes a business process, workflow, or procedure and wants it turned into a diagram, a BPMN file, a flowchart they can edit, or asks to "map", "model", or "diagram" a process — even if they don't say "BPMN" explicitly. Also use when the user has an existing .bpmn file and wants it validated, fixed, or wrapped in an openable editor. For a quick, informal flowchart with no real BPMN semantics (no gateways, swimlanes, or formal process semantics involved), a simpler diagram is usually a better answer than this skill.
+description: Generates valid BPMN 2.0 process diagrams (.bpmn XML) from natural-language business process descriptions, computes visual layout (Diagram Interchange DI), validates graph integrity and control flow, and provides a central interactive web editor (editor.html) with direct disk saving (Ctrl+S), drag-and-drop, file selection, and optional standalone HTML packaging. Use this skill whenever the user describes a business process, workflow, or procedure to map, diagram, or model, or has an existing .bpmn file to validate, repair, layout, or edit.
 ---
 
 # BPMN Process Generator
 
-## What this skill produces
+## 1. O que esta Skill produz
 
-The skill produces:
+O objetivo primário da skill é produzir especificações e diagramas BPMN 2.0 válidos, visualizáveis e editáveis:
 
-1. `<process-name>.bpmn` — valid BPMN 2.0 XML, validated (well-formedness + control-flow lint), with layout (`BPMNDiagram`/`BPMNPlane` DI) computed so it renders sensibly on first open.
-2. Direct access through the **centralized editor** `editor.html` (located in the skill root directory), which opens any `.bpmn` file with drag-and-drop, a file picker, preset examples, and direct disk saving (`Ctrl+S`) via File System Access API.
-3. *(Optional)* `<process-name>.html` — a standalone single self-contained HTML file (via `python scripts/build_editor.py <file>.bpmn`) for portability when sharing a single file with external users who don't have access to the skill folder.
+1. **`<process-name>.bpmn` (Entregável Primário)**:
+   * Arquivo XML em conformidade estrita com o padrão BPMN 2.0 da OMG.
+   * Diagram Interchange (DI) completo calculado via algoritmo topológico (`BPMNDiagram`, `BPMNPlane`, `BPMNShape`, `BPMNEdge` com waypoints).
+   * Validado contra erros sintáticos e linter de fluxo de controle (ausência de deadlocks, nós inalcançáveis, IDs duplicados e desbalanceamento de gateways).
+2. **`editor.html` (Editor Web Centralizado)**:
+   * Aplicação web autossuficiente localizada na raiz da skill baseada no `bpmn-js@17.0.0` (Modeler build).
+   * Permite carregar qualquer `.bpmn` via seletor nativo de arquivos ("📂 Abrir .bpmn" ou `Ctrl+O`), arrastar e soltar (*Drag & Drop*) ou menu de exemplos rápidos (*Presets*).
+   * **Salvamento Direto no Disco**: Em navegadores Chromium (Chrome, Edge, Opera), utiliza a *File System Access API* para gravar alterações diretamente no arquivo aberto no disco ao pressionar `Ctrl+S` ou clicar em "💾 Salvar", sem passar pela pasta de Downloads.
+3. **`<process-name>.html` (Exportação Avulsa Opcional)**:
+   * Pacote HTML estático independente gerado via `python scripts/build_editor.py <file>.bpmn`. Útil quando o usuário precisa enviar um único arquivo autônomo para terceiros que não possuem a pasta da skill.
 
-`<process-name>` must be a filesystem-safe slug (lowercase, hyphens or underscores in place of spaces, no special characters).
+> **Convenção de Slug**: `<process-name>` deve ser um identificador seguro para sistemas de arquivos (letras minúsculas, números e hifens/underscores, sem espaços ou caracteres especiais).
 
-## Workflow
+---
 
-Follow these steps in order. Don't skip validation or lint even for "simple" processes — a diagram that opens but deadlocks or has unreachable steps is worse than an error, because it looks done.
+## 2. Estrutura do Repositório
 
-If the user supplies an existing `.bpmn` file instead of a natural-language description, skip step 1 (extraction) and step 2 (XML generation) — go straight to step 3 to validate and fix what they gave you, then step 4 (wrap it in the HTML editor) and step 5 (report).
+```
+bpmn-process-generator/
+├── .gitignore                      # Regras para versionar apenas o essencial
+├── AGENTS.md                       # Diretrizes de governança para agentes
+├── editor.html                     # Editor central interativo com gravação direta
+├── SKILL.md                        # Esta documentação de referência e workflow
+├── assets/
+│   └── bpmn-editor-template.html   # Template base para exportações HTML avulsas
+├── references/
+│   ├── bpmn-xml-structure.md       # Dicionário de tags, namespaces e exemplos XML
+│   ├── example-complete.bpmn       # Exemplo canônico de referência com layout
+│   └── example-broken.bpmn         # Exemplo com erros intencionais para teste de lint
+└── scripts/
+    ├── bpmn_tool.py                # CLI para layout automático e validação de grafo
+    ├── build_editor.py             # Script para empacotar .bpmn em HTML avulso
+    └── generate_editor_html.py     # Script gerador/atualizador do editor.html central
+```
 
-### 1. Extract process structure from the description
+---
 
-Read the user's description and identify, in order:
+## 3. Workflow Operacional
 
-- **Trigger / start**: what kicks the process off (message arrival, timer, manual start, condition). Maps to a `startEvent`, typed if the trigger is specific (`messageEventDefinition`, `timerEventDefinition`, etc.) or plain if it's just "someone begins the process."
-- **Steps**: discrete pieces of work. Map each to a `task` (or a typed subtype — `userTask` for human steps, `serviceTask` for automated/system steps, `sendTask`/`receiveTask` for messaging — pick the type that matches what the description actually says the step *is*, don't default everything to plain `task`).
-- **Decisions / branches**: anywhere the process forks based on a condition ("if approved... otherwise..."). Maps to an `exclusiveGateway` (XOR) for either/or branches, `parallelGateway` (AND) for "do both at the same time," `inclusiveGateway` (OR) only if the description genuinely implies "one or more of these paths, not necessarily all."
-- **Actors / swimlanes**: if the description names more than one role or department doing distinct parts (e.g. "the customer submits... then the finance team reviews..."), use `laneSet`/`lane` inside the process to separate them. Don't force lanes onto a single-actor process — it adds visual noise without adding information.
-- **End(s)**: every path through the process must terminate at an `endEvent`. A process can have multiple end events (e.g. "approved" vs "rejected" outcomes) — that's normal and often clearer than merging paths artificially.
+Siga rigorosamente as etapas abaixo ao executar a skill. Nunca entregue um diagrama sem validar.
 
-If the description is ambiguous about branch conditions, actor boundaries, or what happens on a failure path, ask the user rather than guessing — a wrong gateway condition silently produces a diagram that looks right but models the wrong process.
+### Passo 1: Extrair a estrutura do processo da descrição
+Analise o texto do usuário e identifique:
+* **Gatilho / Início (`startEvent`)**: Evento disparador do fluxo (mensagem, temporizador, manual).
+* **Atividades (`task`, `userTask`, `serviceTask`)**: Passos discretos de trabalho. Use o tipo correto conforme o executor (humano = `userTask`, sistema automatizado = `serviceTask`).
+* **Decisões e Bifurcações**:
+  * `exclusiveGateway` (XOR): Escolha exclusiva (apenas um caminho tomado).
+  * `parallelGateway` (AND): Execução simultânea e sincronização de ramos.
+  * `inclusiveGateway` (OR): Um ou mais caminhos possíveis (usar apenas quando explicitamente indicado).
+* **Atores e Raias (`laneSet` / `lane`)**: Se houver mais de um papel, setor ou sistema realizando etapas distintas, isole-os em raias horizontais.
+* **Finais (`endEvent`)**: Todo caminho deve convergir para um evento de encerramento. Múltiplos finais independentes (ex: "Aprovado" vs. "Rejeitado") são incentivados para clareza.
 
-### 2. Generate the BPMN 2.0 XML
+### Passo 2: Gerar o XML BPMN 2.0
+Consulte [`references/bpmn-xml-structure.md`](file:///c:/Projetos/bpmn-process-generator/references/bpmn-xml-structure.md) para a estrutura base.
+* Namespaces canônicos obrigatórios: `bpmn`, `bpmndi`, `omgdc`, `omgdi`, `xsi`.
+* IDs legíveis e únicos com convenção PascalCase: `<Tipo>_<DescricaoCurta>` (ex: `Task_ReviewApplication`, `Gateway_Approved`, `Flow_1`).
+* `isExecutable="false"` por padrão para diagramas de modelagem e documentação de processos.
 
-Read `references/bpmn-xml-structure.md` for the element reference, ID conventions, and worked examples (linear process, branching process, multi-lane process, parallel split/join) before writing XML by hand. Key non-negotiables:
+### Passo 3: Calcular Layout e Validar (Obrigatório)
+Execute os subcomandos do utilitário nativo em Python:
 
-- Every element needs a unique `id` (stable, readable — e.g. `Task_ReviewApplication`, not `Task_1`). Sequence flows reference these ids via `sourceRef`/`targetRef`.
-- The `<bpmndi:BPMNDiagram>` section is not optional decoration — without it, bpmn-js has nothing to lay out and renders an empty canvas. Compute simple auto-layout: lay the main flow left-to-right at a fixed row, offset gateway branches vertically (above/below the main row) by a fixed spacing, and give every node explicit `x`/`y`/`width`/`height` in `BPMNShape`, plus `waypoint` points for every `BPMNEdge`. Run the `layout` operation in `scripts/bpmn_tool.py` to compute this — don't hand-place coordinates for anything beyond a trivial 3-node process. (The script is plain Python 3 standard library — no extra packages to install.)
-- Use the standard BPMN 2.0 namespaces and schema location exactly as in the reference examples — a wrong namespace URI is the single most common cause of "valid-looking XML that Camunda rejects."
+```powershell
+# 1. Calcular coordenadas visuais e waypoints ortogonais
+python scripts/bpmn_tool.py layout <caminho>/<processo>.bpmn
 
-### 3. Validate — do not skip this even if generation "looked right"
+# 2. Executar linter de 2 estágios (sintaxe XML + fluxo de controle)
+python scripts/bpmn_tool.py validate <caminho>/<processo>.bpmn
+```
 
-Run the `validate` operation in `scripts/bpmn_tool.py <file>.bpmn`. It performs two checks, in order, and stops at the first failure:
+O linter verifica automaticamente:
+* Bem-formação do XML.
+* Integridade de DI (presença de `BPMNShape` para cada nó e `BPMNEdge` com waypoints válidos para cada fluxo).
+* Ausência de IDs duplicados.
+* Alcance a partir do `startEvent` (sem nós inalcançáveis) e inexistência de becos sem saída (*dead ends*).
+* Balanceamento de bifurcações paralelas (`parallelGateway` split deve possuir join compatível a jusante ou encerramento independente).
 
-1. **Well-formedness**: valid XML syntax. Catches unclosed tags, bad escaping.
-2. **Control-flow lint**: BPMN's schema doesn't and can't enforce that the *graph* (or the DI) makes sense. The lint checks, per process:
-   - **DI completeness**: every flow node has a corresponding `BPMNShape`, and every sequence flow has a `BPMNEdge` with real (non-degenerate) waypoints. A file that's structurally plausible but has no DI renders as a blank canvas in bpmn-js — this is arguably the single most important thing to catch, since it's the failure mode that looks fine right up until the user opens the HTML.
-   - **Duplicate element ids**: bpmn-js hard-fails import the moment it sees a repeated id, so this must be caught before handoff, not discovered by the user.
-   - Exactly the start/end events the process needs exist and are reachable — no process with zero start events, no dangling reachable path that never hits an end event.
-   - No unreachable nodes (something with no incoming sequence flow that isn't a start event).
-   - No dead ends (something with no outgoing sequence flow that isn't an end event).
-   - Every gateway that splits (2+ outgoing flows) either has a matching converging gateway of a compatible type downstream, or its branches each terminate independently at their own end event — flag (don't necessarily block) a parallel split with no join, since that's sometimes intentional but often a mistake.
-   - No orphaned `sequenceFlow` elements referencing a `sourceRef`/`targetRef` id that doesn't exist in the process.
+### Passo 4: Visualizar e Editar no `editor.html`
+* O usuário abre o [`editor.html`](file:///c:/Projetos/bpmn-process-generator/editor.html) na raiz da skill.
+* Carrega o arquivo gerado via botão **"📂 Abrir .bpmn"** ou arrastando o arquivo para a janela.
+* Ajustes manuais de posicionamento ou rótulos podem ser feitos na tela e salvos diretamente no mesmo arquivo com **`Ctrl+S`**.
+* *(Opcional)* Se for solicitada a exportação de um HTML avulso autocontido:
+  ```powershell
+  python scripts/build_editor.py <caminho>/<processo>.bpmn -o <caminho>/<processo>.html -s <processo>
+  ```
 
-There is no separate XSD schema-validation stage — bpmn-js's own import in the HTML editor (step 4) is the real acceptance test for structural validity, and it rejects a structurally invalid document the moment the user opens the file. If validation or lint fails, fix the XML and re-run — don't hand the user a file that fails its own checks with a note saying "there might be issues." Iterate until clean, or until you've identified a genuine ambiguity in the source description that only the user can resolve (in which case, ask).
+### Passo 5: Relatar ao Usuário
+Apresente um resumo executivo do fluxo modelado, os caminhos alternativos mapeados, o resultado das validações aprovadas e os links diretos para o arquivo `.bpmn` e o [`editor.html`](file:///c:/Projetos/bpmn-process-generator/editor.html).
 
-### 4. Review and edit in the central editor (or build a standalone HTML)
- 
-- **Centralized Editor**: Open `editor.html` in the root of the skill. Click "📂 Abrir .bpmn", drag and drop the `.bpmn` file into the canvas, or select it from the preset dropdown. Edits can be saved directly back to disk with `Ctrl+S` or "💾 Salvar".
-- **Optional Standalone HTML**: If a portable single-file deliverable is required, run `python scripts/build_editor.py <process-name>.bpmn -o <process-name>.html -s <process-name>`.
+---
 
-### 5. Report to the user
- 
-State plainly: what the process looks like (short bullet walkthrough of the flow you modeled), which validation/lint checks passed, and any ambiguity you resolved by assumption (name the assumption so they can correct it). Point them to `editor.html` and the generated `.bpmn` file.
+## 4. Referência dos Scripts Utilitários
+
+Todos os scripts operam com a biblioteca padrão do Python 3 (sem necessidade de `pip install`):
+
+| Script | Finalidade | Exemplo de Comando |
+|---|---|---|
+| [`scripts/bpmn_tool.py`](file:///c:/Projetos/bpmn-process-generator/scripts/bpmn_tool.py) | Calcula layout gráfico (DI) e valida integridade semântica do grafo. | `python scripts/bpmn_tool.py layout proc.bpmn`<br>`python scripts/bpmn_tool.py validate proc.bpmn` |
+| [`scripts/build_editor.py`](file:///c:/Projetos/bpmn-process-generator/scripts/build_editor.py) | Empacota um `.bpmn` dentro do template HTML avulso usando dupla codificação JSON segura. | `python scripts/build_editor.py proc.bpmn -o proc.html` |
+| [`scripts/generate_editor_html.py`](file:///c:/Projetos/bpmn-process-generator/scripts/generate_editor_html.py) | Regenera o [`editor.html`](file:///c:/Projetos/bpmn-process-generator/editor.html) central embutindo os presets mais recentes. | `python scripts/generate_editor_html.py` |
+
+---
+
+## 5. Governança e Controle de Versão
+
+O repositório adota política rígida de controle com Git através do [`.gitignore`](file:///c:/Projetos/bpmn-process-generator/.gitignore):
+* Apenas o código-fonte da skill e seus exemplos canônicos são rastreados.
+* Pastas de testes locais (`tests/`), scripts de verificação interna (`scripts/verify_tests.py`), caches Python (`__pycache__`), arquivos do harness (`.harness/scratch/`) e configurações locais (`.claude/`) são automaticamente ignorados.
