@@ -275,7 +275,11 @@ def _edge_waypoints(src_bounds, tgt_bounds, src_col, tgt_col):
         return [start, (start[0], drop_y), (end[0], drop_y), end]
     start = (sx + sw, sy + sh / 2.0)
     end = (tx, ty + th / 2.0)
-    return [start, end]
+    if abs(start[1] - end[1]) < 1.0:
+        return [start, end]
+    # Orthogonal 90-degree routing (Manhattan staircase) for forward edges across different levels:
+    mid_x = (start[0] + end[0]) / 2.0
+    return [start, (mid_x, start[1]), (mid_x, end[1]), end]
 
 
 def compute_diagram(process_el):

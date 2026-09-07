@@ -162,3 +162,40 @@ def test_run_layout_cli_wrapper(tmp_path: Path):
     run_layout(str(input_file), str(output_file))
     assert output_file.exists()
     assert validate(str(output_file)) is True
+
+
+def test_edge_waypoints_orthogonal_90_degrees():
+    """Verify _edge_waypoints produces 90-degree orthogonal waypoints for edges across different vertical levels."""
+    from bpmn_tool import _edge_waypoints
+
+    # 1. Straight horizontal edge (same y) -> 2 waypoints
+    src_bounds = (100, 100, 100, 80)
+    tgt_bounds = (300, 100, 100, 80)
+    wps_straight = _edge_waypoints(src_bounds, tgt_bounds, src_col=0, tgt_col=1)
+    assert len(wps_straight) == 2
+    assert wps_straight[0][1] == wps_straight[1][1]  # same Y, purely horizontal
+
+    # 2. Branching edge (different y) -> 4 waypoints with 90-degree turns
+    tgt_bounds_down = (300, 260, 100, 80)
+    wps_branch = _edge_waypoints(src_bounds, tgt_bounds_down, src_col=0, tgt_col=1)
+    assert len(wps_branch) == 4
+    # Check 90-degree step (start -> (mid_x, y1) -> (mid_x, y2) -> end)
+    p0, p1, p2, p3 = wps_branch
+    # First segment: horizontal
+    assert p0[1] == p1[1]
+    assert p0[0] < p1[0]
+    # Second segment: vertical (90 deg turn)
+    assert p1[0] == p2[0]
+    assert p1[1] != p2[1]
+    # Third segment: horizontal (90 deg turn)
+    assert p2[1] == p3[1]
+    assert p2[0] < p3[0]
+
+    # 3. Back-edge loop -> 4 waypoints routed below
+    wps_loop = _edge_waypoints(tgt_bounds, src_bounds, src_col=1, tgt_col=0)
+    assert len(wps_loop) == 4
+    lp0, lp1, lp2, lp3 = wps_loop
+    assert lp0[0] == lp1[0]  # down
+    assert lp1[1] == lp2[1]  # across horizontally
+    assert lp2[0] == lp3[0]  # up
+

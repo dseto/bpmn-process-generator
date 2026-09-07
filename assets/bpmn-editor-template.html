@@ -176,12 +176,43 @@
 
     modeler.on('commandStack.changed', updateUndoRedo);
 
+    // Assegura roteamento ortogonal em 90° para novas conexões
+    try {
+      modeler.get('eventBus').on('commandStack.connection.create.postExecuted', (event) => {
+        const conn = event.context && event.context.connection;
+        if (conn && conn.type === 'bpmn:SequenceFlow') {
+          try { modeler.get('modeling').layoutConnection(conn); } catch (e) {}
+        }
+      });
+    } catch (e) {}
+
+    // Converte automaticamente conexões diagonais para curvas de 90°
+    function enforceOrthogonalConnections() {
+      try {
+        const elementRegistry = modeler.get('elementRegistry');
+        const modeling = modeler.get('modeling');
+        const conns = elementRegistry.filter(el => {
+          if (!el.waypoints || el.waypoints.length !== 2) return false;
+          const p1 = el.waypoints[0];
+          const p2 = el.waypoints[1];
+          return Math.abs(p1.x - p2.x) > 5 && Math.abs(p1.y - p2.y) > 5;
+        });
+        if (conns.length > 0) {
+          conns.forEach(conn => {
+            try { modeling.layoutConnection(conn); } catch (e) {}
+          });
+        }
+      } catch (e) {}
+    }
+
     async function loadXML(xml) {
       try {
         const result = await modeler.importXML(xml);
         if (result.warnings && result.warnings.length) {
           console.warn('bpmn-js import warnings:', result.warnings);
         }
+        enforceOrthogonalConnections();
+        try { modeler.get('commandStack').clear(); } catch (e) {}
         clearError();
         updateUndoRedo();
       } catch (err) {
