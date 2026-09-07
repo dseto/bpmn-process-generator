@@ -514,17 +514,25 @@ html_content = f"""<!DOCTYPE html>
   const CustomResizeModule = {{
     __init__: ['customResizeRules'],
     customResizeRules: ['type', function(eventBus) {{
-      // Prioridade 1500 executa antes da regra padrão do bpmn-js (prioridade 1000)
-      eventBus.on('shape.resize', 1500, function(context) {{
+      function canResizeTask(context) {{
+        if (!context) return;
         const shape = context.shape;
         if (!shape) return;
         const type = shape.type;
-        // Permite redimensionar qualquer subtipo de Task ou Activity mantendo limite mínimo seguro
         if (type && (type.indexOf('Task') !== -1 || type === 'bpmn:Activity' || type === 'bpmn:CallActivity')) {{
-          return {{
-            min: {{ width: 80, height: 60 }}
-          }};
+          const newBounds = context.newBounds;
+          if (!newBounds) return true;
+          return newBounds.width >= 70 && newBounds.height >= 50;
         }}
+      }}
+
+      // Prioridade 1500 executa antes da regra padrão do bpmn-js (prioridade 1000)
+      eventBus.on('commandStack.shape.resize.canExecute', 1500, function(event) {{
+        return canResizeTask(event.context);
+      }});
+
+      eventBus.on('shape.resize', 1500, function(context) {{
+        return canResizeTask(context);
       }});
     }}]
   }};

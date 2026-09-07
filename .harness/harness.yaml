@@ -7,6 +7,8 @@ governance:
   extra_allowed_commands:
     - python -m harness.cli
     - env:PYTHONPATH =
+    - python scripts/verify_tests.py
+    
 verification:
   enforce_tdd: false
   test_command: "python scripts/verify_tests.py"

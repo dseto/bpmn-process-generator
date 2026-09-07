@@ -135,13 +135,24 @@
     const CustomResizeModule = {
       __init__: ['customResizeRules'],
       customResizeRules: ['type', function(eventBus) {
-        eventBus.on('shape.resize', 1500, function(context) {
+        function canResizeTask(context) {
+          if (!context) return;
           const shape = context.shape;
           if (!shape) return;
           const type = shape.type;
           if (type && (type.indexOf('Task') !== -1 || type === 'bpmn:Activity' || type === 'bpmn:CallActivity')) {
-            return { min: { width: 80, height: 60 } };
+            const newBounds = context.newBounds;
+            if (!newBounds) return true;
+            return newBounds.width >= 70 && newBounds.height >= 50;
           }
+        }
+
+        eventBus.on('commandStack.shape.resize.canExecute', 1500, function(event) {
+          return canResizeTask(event.context);
+        });
+
+        eventBus.on('shape.resize', 1500, function(context) {
+          return canResizeTask(context);
         });
       }]
     };
