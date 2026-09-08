@@ -85,28 +85,46 @@ html_content = f"""<!DOCTYPE html>
   }}
 
   * {{ box-sizing: border-box; }}
-  html, body {{ height: 100%; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; }}
+  html, body {{
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }}
 
   #app-header {{
-    height: 52px;
+    min-height: 48px;
+    height: auto;
     background: var(--bg-header);
     border-bottom: 1px solid var(--bg-header-border);
     display: flex;
     align-items: center;
-    padding: 0 14px;
-    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 12px;
+    gap: 4px 6px;
     color: var(--text-light);
     user-select: none;
     overflow-x: auto;
-    white-space: nowrap;
+    position: relative;
+    z-index: 100;
+    flex-shrink: 0;
   }}
 
   #app-header::-webkit-scrollbar {{
-    height: 4px;
+    height: 6px;
+  }}
+  #app-header::-webkit-scrollbar-track {{
+    background: #0f172a;
   }}
   #app-header::-webkit-scrollbar-thumb {{
-    background: #334155;
-    border-radius: 2px;
+    background: #475569;
+    border-radius: 3px;
+  }}
+  #app-header::-webkit-scrollbar-thumb:hover {{
+    background: #64748b;
   }}
 
   .brand {{
@@ -130,13 +148,13 @@ html_content = f"""<!DOCTYPE html>
   .button-group {{
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     flex-shrink: 0;
   }}
 
   .toolbar-sep {{
     width: 1px;
-    height: 24px;
+    height: 22px;
     background: rgba(255,255,255,0.12);
     margin: 0 2px;
     flex-shrink: 0;
@@ -147,15 +165,16 @@ html_content = f"""<!DOCTYPE html>
     color: var(--text-light);
     border: 1px solid rgba(255,255,255,0.1);
     border-radius: 6px;
-    padding: 6px 10px;
+    padding: 5px 8px;
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     transition: all 0.15s ease-in-out;
     white-space: nowrap;
+    line-height: 1.2;
   }}
 
   button:hover {{
@@ -247,12 +266,27 @@ html_content = f"""<!DOCTYPE html>
     align-items: center;
     gap: 8px;
     background: #1e293b;
-    padding: 5px 12px;
+    padding: 4px 10px;
     border-radius: 6px;
     font-size: 12px;
     color: var(--text-muted);
     border: 1px solid rgba(255,255,255,0.05);
     flex-shrink: 0;
+  }}
+
+  #current-filename {{
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: middle;
+  }}
+
+  #preset-select {{
+    max-width: 175px;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }}
 
   .file-badge strong {{
@@ -271,15 +305,16 @@ html_content = f"""<!DOCTYPE html>
   }}
 
   #canvas {{
-    height: calc(100% - 52px);
+    flex: 1 1 auto;
     width: 100%;
+    min-height: 0;
     background: #ffffff;
     position: relative;
   }}
 
   #error-banner {{
     display: none;
-    position: absolute;
+    position: fixed;
     top: 60px;
     left: 20px;
     right: 20px;
@@ -289,14 +324,14 @@ html_content = f"""<!DOCTYPE html>
     border-radius: 8px;
     font-size: 13px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-    z-index: 1000;
+    z-index: 2500;
     white-space: pre-wrap;
   }}
 
   #drop-overlay {{
     display: none;
-    position: absolute;
-    top: 52px;
+    position: fixed;
+    top: 0;
     left: 0;
     right: 0;
     bottom: 0;
@@ -313,6 +348,15 @@ html_content = f"""<!DOCTYPE html>
     border: 3px dashed #38bdf8;
     margin: 12px;
     border-radius: 12px;
+  }}
+
+  @media (max-width: 768px) {{
+    .file-badge {{
+      margin-left: 0;
+    }}
+    .toolbar-sep {{
+      display: none;
+    }}
   }}
 
   #toast {{
@@ -1173,6 +1217,17 @@ html_content = f"""<!DOCTYPE html>
         }}
       }}
     }});
+
+    // Permite rolagem horizontal da barra pelo scroll vertical do mouse quando houver overflow
+    const appHeader = document.getElementById('app-header');
+    if (appHeader) {{
+      appHeader.addEventListener('wheel', (e) => {{
+        if (e.deltaY !== 0 && appHeader.scrollWidth > appHeader.clientWidth) {{
+          e.preventDefault();
+          appHeader.scrollLeft += e.deltaY;
+        }}
+      }}, {{ passive: false }});
+    }}
 
     // Atalhos de teclado (Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Y, Ctrl+F, Ctrl+B, Ctrl+I)
     window.addEventListener('keydown', (e) => {{

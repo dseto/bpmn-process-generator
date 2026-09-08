@@ -8,19 +8,42 @@
 <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.0/dist/assets/bpmn-font/css/bpmn.css" />
 <script src="https://unpkg.com/bpmn-js@17.0.0/dist/bpmn-modeler.production.min.js"></script>
 <style>
-  html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  #toolbar {
-    display: flex; align-items: center; gap: 6px;
-    padding: 6px 12px; background: #1a1a1a; color: #fff;
-    overflow-x: auto; white-space: nowrap;
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
-  #toolbar span.title { font-size: 13px; font-weight: 600; color: #38bdf8; margin-right: 4px; }
-  #toolbar span.proc-name { font-size: 12px; opacity: 0.7; margin-left: auto; }
-  .toolbar-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 2px; }
+  #toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px 6px;
+    padding: 6px 12px;
+    background: #1a1a1a;
+    color: #fff;
+    min-height: 42px;
+    height: auto;
+    position: relative;
+    z-index: 100;
+    flex-shrink: 0;
+    overflow-x: auto;
+  }
+  #toolbar::-webkit-scrollbar { height: 6px; }
+  #toolbar::-webkit-scrollbar-track { background: #1a1a1a; }
+  #toolbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+  #toolbar span.title { font-size: 13px; font-weight: 600; color: #38bdf8; margin-right: 4px; flex-shrink: 0; }
+  #toolbar span.proc-name { font-size: 12px; opacity: 0.7; margin-left: auto; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+  .toolbar-sep { width: 1px; height: 20px; background: rgba(255,255,255,0.2); margin: 0 2px; flex-shrink: 0; }
   button {
     background: #2b6cb0; color: #fff; border: none; border-radius: 4px;
-    padding: 5px 10px; font-size: 12px; cursor: pointer; display: inline-flex;
-    align-items: center; gap: 4px; transition: background 0.15s;
+    padding: 5px 8px; font-size: 12px; cursor: pointer; display: inline-flex;
+    align-items: center; gap: 4px; transition: background 0.15s; white-space: nowrap;
+    line-height: 1.2;
   }
   button:hover { background: #2c5282; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -31,10 +54,11 @@
   button.active { background: #2563eb !important; color: #fff !important; border-color: #38bdf8 !important; box-shadow: 0 0 6px rgba(56, 189, 248, 0.4); }
   .btn-font-toggle { font-weight: 700; min-width: 28px; justify-content: center; }
   select { background: #334155; color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 4px; padding: 4px 8px; font-size: 12px; outline: none; }
-  #canvas { height: calc(100% - 42px); }
+  #canvas { flex: 1 1 auto; width: 100%; min-height: 0; position: relative; }
   #error-banner {
-    display: none; background: #c53030; color: #fff; padding: 10px 12px;
-    font-size: 13px; white-space: pre-wrap;
+    display: none; position: fixed; top: 50px; left: 20px; right: 20px;
+    background: #c53030; color: #fff; padding: 10px 12px;
+    font-size: 13px; white-space: pre-wrap; z-index: 2500; border-radius: 6px;
   }
   #toast {
     position: fixed;
@@ -593,6 +617,17 @@
         toggleItalic();
       }
     });
+
+    // Permite rolagem horizontal da barra pelo scroll vertical do mouse quando houver overflow
+    const toolbarEl = document.getElementById('toolbar');
+    if (toolbarEl) {
+      toolbarEl.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0 && toolbarEl.scrollWidth > toolbarEl.clientWidth) {
+          e.preventDefault();
+          toolbarEl.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+    }
 
     loadXML(ORIGINAL_BPMN_XML);
   }

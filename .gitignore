@@ -27,6 +27,7 @@ tests/*.html
 # Configurações locais de agentes e harness
 .claude/
 .harness/scratch/
+.harness/work/
 .harness/*.json
 
 # Arquivos do Sistema Operacional

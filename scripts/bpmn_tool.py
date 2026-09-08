@@ -429,7 +429,7 @@ def copy_editor_if_needed(target_dir, bpmn_path=None):
 
             # 2. Atualiza estado e título visual
             content = content.replace('let currentFileName = "diagrama.bpmn";', f'let currentFileName = {name_json};')
-            content = content.replace('<span id="current-filename">diagrama.bpmn</span>', f'<span id="current-filename">{diagram_name}</span>')
+            content = re.sub(r'<span id="current-filename">.*?</span>', f'<span id="current-filename">{diagram_name}</span>', content)
             content = content.replace('<title>BPMN Editor Central</title>', f'<title>BPMN Editor — {diagram_name}</title>')
 
             # 3. Presets limpos: contém estritamente o diagrama gerado e blank, eliminando exemplos da skill

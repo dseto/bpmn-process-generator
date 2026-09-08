@@ -147,3 +147,29 @@ def test_editor_html_does_not_auto_load_skill_examples(project_root: Path):
     assert "DEFAULT_DIAGRAM_XML" in content
     # Ensure it doesn't auto-load the bus process or any other preset as startup default
     assert "loadXML(PRESETS['06-bus-boarding-process.bpmn']" not in content
+
+
+def test_editor_html_toolbar_is_responsive_and_accessible(project_root: Path):
+    """Verify editor.html uses flexbox wrapping, flexible canvas, and wheel scrolling for toolbar accessibility."""
+    editor_path = project_root / "editor.html"
+    content = editor_path.read_text(encoding="utf-8")
+
+    # Responsive layout rules
+    assert "flex-direction: column" in content
+    assert "flex-wrap: wrap" in content
+    assert "flex: 1 1 auto" in content
+    assert "min-height: 48px" in content
+    assert "appHeader.addEventListener('wheel'" in content
+    assert "#drop-overlay" in content
+    assert "position: fixed" in content
+
+
+def test_template_html_toolbar_is_responsive_and_accessible(project_root: Path):
+    """Verify assets/bpmn-editor-template.html uses flexbox wrapping and flexible canvas."""
+    template_path = project_root / "assets" / "bpmn-editor-template.html"
+    content = template_path.read_text(encoding="utf-8")
+
+    assert "flex-direction: column" in content
+    assert "flex-wrap: wrap" in content
+    assert "flex: 1 1 auto" in content
+    assert "toolbarEl.addEventListener('wheel'" in content
