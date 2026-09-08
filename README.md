@@ -135,7 +135,7 @@ Esta pasta pode ser adicionada como uma **Skill** no Claude Code ou no Google An
 2. Identificar atores, tarefas humanas/sistemas, bifurcações condicionais e eventos.
 3. Gerar o arquivo `.bpmn` correspondente na pasta do projeto solicitante.
 4. Aplicar o layout automático e validar o grafo com `bpmn_tool.py` (que copia automaticamente o `editor.html` para a pasta do projeto se não existir).
-5. Disponibilizar o link para o `editor.html` local copiado no projeto (`editor.html?file=<processo>.bpmn`), sem criar arquivos HTML com o nome do diagrama e sem apontar para a pasta da skill.
+5. Disponibilizar o link para o `editor.html` local copiado no projeto (`editor.html?file=<processo>.bpmn`), configurado para apontar por padrão para o diagrama gerado (sem nunca carregar exemplos da pasta da skill), sem criar arquivos HTML com o nome do diagrama e sem apontar para a pasta da skill.
 
 ---
 

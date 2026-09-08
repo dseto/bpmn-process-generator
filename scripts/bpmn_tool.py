@@ -26,10 +26,32 @@ Both subcommands share the same tag list and graph-building logic
 a flow node.
 """
 import argparse
+import json
 from pathlib import Path
+import re
 import shutil
 import sys
 from xml.etree import ElementTree as ET
+
+BLANK_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_NewProcess"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Novo" name="Novo Processo" isExecutable="false">
+    <bpmn:startEvent id="Start_1" name="Início" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_Novo">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_Novo" bpmnElement="Process_Novo">
+      <bpmndi:BPMNShape id="Start_1_di" bpmnElement="Start_1">
+        <omgdc:Bounds x="160" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>"""
 
 BPMN_NS = "http://www.omg.org/spec/BPMN/20100524/MODEL"
 BPMNDI_NS = "http://www.omg.org/spec/BPMN/20100524/DI"
@@ -354,11 +376,11 @@ def compute_diagram(process_el):
     return diagram
 
 
-def copy_editor_if_needed(target_dir):
+def copy_editor_if_needed(target_dir, bpmn_path=None):
     """
-    Copy editor.html from the skill root to the project directory if it does not
-    already exist there. Do not overwrite existing files, and do not pollute
-    the skill's internal test/reference directories.
+    Copy editor.html from the skill root to the project directory, configuring it to
+    point by default to the generated BPMN diagram. Under no circumstances may it
+    point to an example diagram from the skill repository.
     """
     root_dir = Path(__file__).resolve().parent.parent
     source_editor = root_dir / "editor.html"
@@ -376,11 +398,86 @@ def copy_editor_if_needed(target_dir):
         return None
 
     target_editor = target_dir / "editor.html"
-    if not target_editor.exists():
-        target_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_editor, target_editor)
+
+    # If bpmn_path is not specified, discover if there is a .bpmn file in target_dir
+    if bpmn_path is None:
+        bpmn_candidates = list(target_dir.glob("*.bpmn"))
+        if len(bpmn_candidates) == 1:
+            bpmn_path = bpmn_candidates[0]
+        elif len(bpmn_candidates) > 1:
+            bpmn_path = max(bpmn_candidates, key=lambda f: f.stat().st_mtime)
+
+    content = source_editor.read_text(encoding="utf-8")
+    diagram_name = None
+
+    if bpmn_path:
+        bpmn_file = Path(bpmn_path).resolve()
+        if bpmn_file.exists():
+            diagram_name = bpmn_file.name
+            diagram_xml = bpmn_file.read_text(encoding="utf-8")
+
+            name_json = json.dumps(diagram_name, ensure_ascii=False)
+            xml_json = re.sub(
+                r'</script', r'<\\/script',
+                json.dumps(diagram_xml, ensure_ascii=False),
+                flags=re.IGNORECASE
+            )
+
+            # 1. Configura diagrama padrão embutido
+            content = content.replace('let DEFAULT_DIAGRAM_NAME = "";', f'let DEFAULT_DIAGRAM_NAME = {name_json};')
+            content = content.replace('let DEFAULT_DIAGRAM_XML = null;', f'let DEFAULT_DIAGRAM_XML = {xml_json};')
+
+            # 2. Atualiza estado e título visual
+            content = content.replace('let currentFileName = "diagrama.bpmn";', f'let currentFileName = {name_json};')
+            content = content.replace('<span id="current-filename">diagrama.bpmn</span>', f'<span id="current-filename">{diagram_name}</span>')
+            content = content.replace('<title>BPMN Editor Central</title>', f'<title>BPMN Editor — {diagram_name}</title>')
+
+            # 3. Presets limpos: contém estritamente o diagrama gerado e blank, eliminando exemplos da skill
+            presets_replacement = json.dumps({"_blank": BLANK_TEMPLATE, diagram_name: diagram_xml}, ensure_ascii=False)
+            presets_replacement = re.sub(r'</script', r'<\\/script', presets_replacement, flags=re.IGNORECASE)
+            content = re.sub(
+                r'/\*PRESETS_START\*/.*?/\*PRESETS_END\*/',
+                f'/*PRESETS_START*/\n  const PRESETS = {presets_replacement};\n  /*PRESETS_END*/',
+                content,
+                flags=re.DOTALL
+            )
+
+            new_select = f'''<select id="preset-select" title="Diagramas">
+      <option value="{diagram_name}" selected>{diagram_name} (Padrão)</option>
+      <option value="_blank">+ Novo Diagrama (Em branco)</option>
+    </select>'''
+            content = re.sub(
+                r'<!--PRESET_SELECT_START-->.*?<!--PRESET_SELECT_END-->',
+                f'<!--PRESET_SELECT_START-->\n    {new_select}\n    <!--PRESET_SELECT_END-->',
+                content,
+                flags=re.DOTALL
+            )
+
+    if not diagram_name:
+        # Se nenhum diagrama foi especificado, remove qualquer preset de exemplo da skill
+        presets_replacement = json.dumps({"_blank": BLANK_TEMPLATE}, ensure_ascii=False)
+        content = re.sub(
+            r'/\*PRESETS_START\*/.*?/\*PRESETS_END\*/',
+            f'/*PRESETS_START*/\n  const PRESETS = {presets_replacement};\n  /*PRESETS_END*/',
+            content,
+            flags=re.DOTALL
+        )
+        new_select = '''<select id="preset-select" title="Diagramas">
+      <option value="_blank" selected>+ Novo Diagrama (Em branco)</option>
+    </select>'''
+        content = re.sub(
+            r'<!--PRESET_SELECT_START-->.*?<!--PRESET_SELECT_END-->',
+            f'<!--PRESET_SELECT_START-->\n    {new_select}\n    <!--PRESET_SELECT_END-->',
+            content,
+            flags=re.DOTALL
+        )
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_editor.write_text(content, encoding="utf-8")
+    if diagram_name:
+        print(f"[OK] Copied and configured editor in project: {target_editor} (default: {diagram_name})")
+    else:
         print(f"[OK] Copied central editor to project directory: {target_editor}")
-        return target_editor
     return target_editor
 
 
@@ -401,7 +498,7 @@ def run_layout(input_path, output_path=None, copy_editor=True):
     tree.write(out_path, encoding="UTF-8", xml_declaration=True)
     print(f"[OK] Wrote layout for {len(processes)} process(es) to {out_path}")
     if copy_editor:
-        copy_editor_if_needed(out_file.parent)
+        copy_editor_if_needed(out_file.parent, bpmn_path=out_file)
 
 
 # ---------------------------------------------------------------------------
@@ -605,8 +702,9 @@ def main():
     p_validate = sub.add_parser("validate", help="Run well-formedness + control-flow lint on a .bpmn file.")
     p_validate.add_argument("file", help="Path to the .bpmn file to validate.")
 
-    p_copy = sub.add_parser("copy-editor", help="Copy editor.html to a project directory if not already present.")
+    p_copy = sub.add_parser("copy-editor", help="Copy editor.html to a project directory and configure default diagram.")
     p_copy.add_argument("target_dir", help="Target project directory.")
+    p_copy.add_argument("bpmn_file", nargs="?", default=None, help="Optional BPMN diagram to configure as default.")
 
     args = parser.parse_args()
 
@@ -615,7 +713,7 @@ def main():
     elif args.command == "validate":
         sys.exit(0 if validate(args.file) else 1)
     elif args.command == "copy-editor":
-        copied = copy_editor_if_needed(args.target_dir)
+        copied = copy_editor_if_needed(args.target_dir, bpmn_path=args.bpmn_file)
         sys.exit(0 if copied else 1)
 
 

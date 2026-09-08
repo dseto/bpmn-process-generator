@@ -454,6 +454,7 @@ html_content = f"""<!DOCTYPE html>
 
   <!-- Seletor de Presets -->
   <div class="button-group">
+    <!--PRESET_SELECT_START-->
     <select id="preset-select" title="Carregar um diagrama de teste ou exemplo integrado">
       <option value="">-- Exemplos / Testes --</option>
       <option value="06-bus-boarding-process.bpmn">06. Ônibus Completo (4 Raias)</option>
@@ -464,6 +465,7 @@ html_content = f"""<!DOCTYPE html>
       <option value="05-document-revision-cycle.bpmn">05. Revisão de Documentos (Loop)</option>
       <option value="example-complete.bpmn">Exemplo Referência (Expense Approval)</option>
     </select>
+    <!--PRESET_SELECT_END-->
   </div>
 
   <!-- Badge de Status do Arquivo -->
@@ -486,7 +488,11 @@ html_content = f"""<!DOCTYPE html>
 <div id="toast"></div>
 
 <script>
+  /*PRESETS_START*/
   const PRESETS = {presets_json};
+  /*PRESETS_END*/
+  let DEFAULT_DIAGRAM_NAME = "";
+  let DEFAULT_DIAGRAM_XML = null;
 
   let currentFileHandle = null;
   let currentFileName = "diagrama.bpmn";
@@ -1201,9 +1207,25 @@ html_content = f"""<!DOCTYPE html>
 
     async function initEditor() {{
       applyDiagramFont();
+
+      // 1. Se foi passado ?file=..., prioriza o arquivo solicitado
       if (fileParam) {{
         currentFileName = fileParam;
         setFileState(fileParam, null, false);
+
+        // Se o arquivo solicitado corresponder ao diagrama padrão embutido, carrega diretamente (sem CORS)
+        if (DEFAULT_DIAGRAM_NAME && fileParam === DEFAULT_DIAGRAM_NAME && DEFAULT_DIAGRAM_XML) {{
+          await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
+          return;
+        }}
+
+        // Se corresponder a um dos presets embutidos, carrega do preset
+        if (PRESETS[fileParam]) {{
+          await loadXML(PRESETS[fileParam], fileParam, null);
+          return;
+        }}
+
+        // Tenta fetch local
         try {{
           const res = await fetch(fileParam);
           if (res.ok) {{
@@ -1218,11 +1240,14 @@ html_content = f"""<!DOCTYPE html>
         return;
       }}
 
-      if (PRESETS['06-bus-boarding-process.bpmn']) {{
-        loadXML(PRESETS['06-bus-boarding-process.bpmn'], '06-bus-boarding-process.bpmn', null);
-      }} else {{
-        newDiagram();
+      // 2. Se há um diagrama padrão configurado para este editor (quando copiado no projeto)
+      if (DEFAULT_DIAGRAM_NAME && DEFAULT_DIAGRAM_XML) {{
+        await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
+        return;
       }}
+
+      // 3. Fallback: NUNCA apontar para diagrama de exemplo da skill por padrão. Inicia em branco.
+      newDiagram();
     }}
 
     initEditor();

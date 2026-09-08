@@ -24,6 +24,7 @@ O objetivo primário da skill é produzir especificações e diagramas BPMN 2.0 
 > **Regras Mandatórias de Entrega:**
 > - **NÃO crie arquivo com o nome do diagrama** (ex: proibido criar `<process-name>.html`).
 > - **NÃO aponte para o arquivo original na raiz da skill** (proibido fornecer links para `bpmn-process-generator/editor.html`).
+> - **NÃO aponte para diagramas de exemplo da pasta da skill** (o `editor.html` copiado deve apontar por padrão para o diagrama gerado no projeto).
 > - **SEMPRE aponte para o `editor.html` local copiado no projeto solicitante** (`file:///<caminho-do-projeto>/editor.html?file=<processo>.bpmn`).
 
 ---
@@ -113,6 +114,7 @@ Apresente um resumo executivo do fluxo modelado, os caminhos alternativos mapead
 > **Proibições Estritas**:
 > - **NUNCA** gere arquivo HTML com o nome do diagrama (como `<processo>.html`).
 > - **NUNCA** aponte para o arquivo `editor.html` na raiz da pasta da skill (`c:/Projetos/bpmn-process-generator/editor.html`). O link fornecido ao usuário DEVE sempre apontar para o `editor.html` copiado no projeto solicitante.
+> - **NUNCA** aponte para diagramas de exemplo que estão na pasta da skill (o `editor.html` copiado deve ter o diagrama gerado como padrão e não deve conter ou carregar exemplos da pasta da skill).
 
 ---
 

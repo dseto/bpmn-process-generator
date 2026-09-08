@@ -136,3 +136,14 @@ def test_editor_html_has_file_param_query_support(project_root: Path):
 
     assert "urlParams.get('file')" in content
     assert "initEditor" in content
+
+
+def test_editor_html_does_not_auto_load_skill_examples(project_root: Path):
+    """Verify central editor.html has DEFAULT_DIAGRAM hooks and does not auto-load skill examples on startup."""
+    editor_path = project_root / "editor.html"
+    content = editor_path.read_text(encoding="utf-8")
+
+    assert "DEFAULT_DIAGRAM_NAME" in content
+    assert "DEFAULT_DIAGRAM_XML" in content
+    # Ensure it doesn't auto-load the bus process or any other preset as startup default
+    assert "loadXML(PRESETS['06-bus-boarding-process.bpmn']" not in content

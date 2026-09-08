@@ -220,14 +220,45 @@ def test_copy_editor_skips_internal_dirs(tests_dir: Path, references_dir: Path):
 
 
 def test_run_layout_copies_editor_to_project(tmp_path: Path):
-    """Verify run_layout copies editor.html to the project directory containing the diagram."""
+    """Verify run_layout copies editor.html to the project directory containing the diagram and sets it as default."""
     project_dir = tmp_path / "my_project"
     project_dir.mkdir()
     input_file = project_dir / "process.bpmn"
     input_file.write_text(MINIMAL_VALID_PROCESS_XML, encoding="utf-8")
 
     run_layout(str(input_file))
-    assert (project_dir / "editor.html").exists()
+    editor_file = project_dir / "editor.html"
+    assert editor_file.exists()
+
+    content = editor_file.read_text(encoding="utf-8")
+    assert 'let DEFAULT_DIAGRAM_NAME = "process.bpmn";' in content
+    assert "let DEFAULT_DIAGRAM_XML =" in content
+    assert "Process_Simple" in content
+    assert "process.bpmn (Padrão)" in content
+    # Under no circumstances should skill test examples be in the copied project editor
+    assert "06-bus-boarding-process.bpmn" not in content
+    assert "04-incident-management.bpmn" not in content
+
+
+def test_copy_editor_sets_default_diagram_and_strips_skill_examples(tmp_path: Path):
+    """Verify copy_editor_if_needed points by default to the target diagram and never to skill examples."""
+    project_dir = tmp_path / "crm_workflow"
+    project_dir.mkdir()
+    bpmn_file = project_dir / "lead-qualification.bpmn"
+    bpmn_file.write_text(MINIMAL_VALID_PROCESS_XML, encoding="utf-8")
+
+    copied = copy_editor_if_needed(project_dir, bpmn_path=bpmn_file)
+    assert copied is not None
+    assert copied.exists()
+
+    content = copied.read_text(encoding="utf-8")
+    assert 'let DEFAULT_DIAGRAM_NAME = "lead-qualification.bpmn";' in content
+    assert "lead-qualification.bpmn (Padrão)" in content
+    assert "BPMN Editor — lead-qualification.bpmn" in content
+    # Verify skill examples are completely stripped
+    assert "06-bus-boarding-process.bpmn" not in content
+    assert "03-order-fulfillment.bpmn" not in content
+    assert "02-credit-card-approval.bpmn" not in content
 
 
 def test_run_layout_with_no_copy_editor(tmp_path: Path):
