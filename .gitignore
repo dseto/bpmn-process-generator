@@ -27,7 +27,7 @@ tests/*.html
 # Configurações locais de agentes e harness
 .claude/
 .harness/scratch/
-.harness/compiled-state-session.json
+.harness/*.json
 
 # Arquivos do Sistema Operacional
 .DS_Store
