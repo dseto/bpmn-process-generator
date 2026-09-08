@@ -8,6 +8,7 @@ from bpmn_tool import (
     stage2_lint,
     validate,
     run_layout,
+    copy_editor_if_needed,
     BPMN_NS,
 )
 
@@ -198,4 +199,44 @@ def test_edge_waypoints_orthogonal_90_degrees():
     assert lp0[0] == lp1[0]  # down
     assert lp1[1] == lp2[1]  # across horizontally
     assert lp2[0] == lp3[0]  # up
+
+
+def test_copy_editor_if_needed_external_dir(tmp_path: Path):
+    """Verify copy_editor_if_needed copies editor.html to an external directory."""
+    dest = copy_editor_if_needed(tmp_path)
+    assert dest is not None
+    assert dest.exists()
+    assert dest.name == "editor.html"
+
+    # Second call should return the existing path without error
+    dest2 = copy_editor_if_needed(tmp_path)
+    assert dest2 == dest
+
+
+def test_copy_editor_skips_internal_dirs(tests_dir: Path, references_dir: Path):
+    """Verify copy_editor_if_needed refuses to copy to internal skill directories."""
+    assert copy_editor_if_needed(tests_dir) is None
+    assert copy_editor_if_needed(references_dir) is None
+
+
+def test_run_layout_copies_editor_to_project(tmp_path: Path):
+    """Verify run_layout copies editor.html to the project directory containing the diagram."""
+    project_dir = tmp_path / "my_project"
+    project_dir.mkdir()
+    input_file = project_dir / "process.bpmn"
+    input_file.write_text(MINIMAL_VALID_PROCESS_XML, encoding="utf-8")
+
+    run_layout(str(input_file))
+    assert (project_dir / "editor.html").exists()
+
+
+def test_run_layout_with_no_copy_editor(tmp_path: Path):
+    """Verify run_layout respects copy_editor=False."""
+    project_dir = tmp_path / "project_no_copy"
+    project_dir.mkdir()
+    input_file = project_dir / "process.bpmn"
+    input_file.write_text(MINIMAL_VALID_PROCESS_XML, encoding="utf-8")
+
+    run_layout(str(input_file), copy_editor=False)
+    assert not (project_dir / "editor.html").exists()
 

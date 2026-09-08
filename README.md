@@ -14,8 +14,10 @@ Projetado como uma **Agent Skill** para assistentes de IA (Claude Code, Antigrav
 * **Validação Estrita de Grafo (Linter em 2 Estágios)**:
   1. *Sintaxe*: Verificação de bem-formação estrutural do XML.
   2. *Controle de Fluxo*: Checagem de nós inalcançáveis (*unreachable*), becos sem saída (*dead ends*), duplicidade de identificadores, integridade de referências e balanceamento de bifurcações paralelas.
-* **Editor Web Centralizado (`editor.html`)**:
+* **Editor Web Interativo (`editor.html`)**:
   * Aplicação web embarcada baseada em [bpmn-js@17.0.0](https://bpmn.io/toolkit/bpmn-js/).
+  * **Distribuição Automática para Projetos**: Copiado automaticamente para a pasta do projeto que solicitou o diagrama, tornando a própria pasta do projeto o diretório padrão.
+  * **Tipografia e Estilo de Fonte por Elemento**: Seletor de tamanho (`9px` a `20px`) e botões/atalhos para **Negrito** (`Ctrl+B`) e *Itálico* (`Ctrl+I`) específicos para os elementos selecionados (shapes e rótulos), preservados fielmente em exportações gráficas.
   * **Redimensionamento de Tarefas**: Alças nos 4 cantos de qualquer tarefa (*UserTask*, *ServiceTask*, etc.) com controle de dimensão mínima de segurança (80×60 px).
   * **Curvas e Trajetórias em 90°**: Botão de rota ortogonal rápida (`📐 Curva 90°`) para converter conexões retas/diagonais em ângulos retos perfeitos de 90° (Manhattan routing), aplicável a conexões selecionadas ou ao diagrama completo.
   * **Alinhamento Magnético (Grid Snapping)**: Encaixe automático em grade de 10 px para alinhamento preciso de nós e linhas.
@@ -23,9 +25,9 @@ Projetado como uma **Agent Skill** para assistentes de IA (Claude Code, Antigrav
   * **Paleta de Cores Integrada**: Atribuição rápida de cores de destaque (*fill* e *stroke*) em tarefas, eventos e raias compatíveis com o padrão BPMNDI.
   * **Busca no Diagrama**: Ferramenta de localização de nós e fluxos integrada (`Ctrl+F`).
   * **Controles de Zoom e Enquadramento**: Zoom in, Zoom out, reset 100% (1:1) e enquadramento automático à janela (*fit-viewport*).
-  * **Exportação Gráfica (SVG e PNG 2x)**: Download imediato do diagrama em vetor SVG e em imagem rasterizada de alta resolução PNG.
+  * **Exportação Gráfica (SVG e PNG 2x)**: Download imediato do diagrama em vetor SVG e em imagem rasterizada de alta resolução PNG com a tipografia intacta.
   * **Salvamento Direto no Disco**: Utiliza a *File System Access API* no Chrome e Edge para gravar alterações diretamente no arquivo aberto (`Ctrl+S`), sem necessidade de download manual.
-  * **Drag & Drop**: Arraste qualquer arquivo `.bpmn` ou `.xml` para a janela do navegador para visualizá-lo e editá-lo instantaneamente.
+  * **Drag & Drop e URL Query**: Arraste qualquer `.bpmn` para o canvas ou abra com `editor.html?file=meu-processo.bpmn`.
   * **Exemplos Integrados (*Presets*)**: Seletor com diagramas pré-carregados que funcionam 100% offline e sem restrições de CORS via protocolo `file://`.
 * **Exportação Portátil Avulsa**: Capacidade de empacotar qualquer `.bpmn` em um único arquivo `.html` autossuficiente para envio a clientes e partes interessadas.
 
@@ -131,9 +133,9 @@ python scripts/verify_tests.py
 Esta pasta pode ser adicionada como uma **Skill** no Claude Code ou no Google Antigravity. O assistente é capaz de:
 1. Ler uma descrição de processo corporativo enviada pelo usuário.
 2. Identificar atores, tarefas humanas/sistemas, bifurcações condicionais e eventos.
-3. Gerar o arquivo `.bpmn` correspondente.
-4. Aplicar o layout automático e validar o grafo com `bpmn_tool.py`.
-5. Disponibilizar o arquivo para abertura e refinamento imediato no `editor.html`.
+3. Gerar o arquivo `.bpmn` correspondente na pasta do projeto solicitante.
+4. Aplicar o layout automático e validar o grafo com `bpmn_tool.py` (que copia automaticamente o `editor.html` para a pasta do projeto se não existir).
+5. Disponibilizar o link para o `editor.html` local copiado no projeto (`editor.html?file=<processo>.bpmn`), sem criar arquivos HTML com o nome do diagrama e sem apontar para a pasta da skill.
 
 ---
 

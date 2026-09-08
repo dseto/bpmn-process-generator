@@ -128,6 +128,19 @@
     background: #3730a3;
   }
 
+  button.active {
+    background: #2563eb !important;
+    color: #ffffff !important;
+    border-color: #38bdf8 !important;
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.4);
+  }
+
+  .btn-font-toggle {
+    font-weight: 700;
+    min-width: 28px;
+    justify-content: center;
+  }
+
   select {
     padding-right: 24px;
     background-color: #1e293b;
@@ -325,6 +338,26 @@
 
   <div class="toolbar-sep"></div>
 
+  <!-- Grupo Tipografia & Fonte -->
+  <div class="button-group" title="Tipografia e estilo de fonte do diagrama">
+    <span class="color-label">Fonte:</span>
+    <select id="font-size-select" title="Alterar tamanho da fonte do diagrama">
+      <option value="9px">9px</option>
+      <option value="10px">10px</option>
+      <option value="11px">11px</option>
+      <option value="12px" selected>12px (Padrão)</option>
+      <option value="13px">13px</option>
+      <option value="14px">14px</option>
+      <option value="16px">16px</option>
+      <option value="18px">18px</option>
+      <option value="20px">20px</option>
+    </select>
+    <button id="btn-font-bold" class="btn-font-toggle" title="Alternar Negrito (Ctrl+B)"><b>B</b></button>
+    <button id="btn-font-italic" class="btn-font-toggle" title="Alternar Itálico (Ctrl+I)"><i>I</i></button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
   <!-- Grupo Visualização & Zoom -->
   <div class="button-group">
     <button id="btn-search" title="Localizar elementos no diagrama (Ctrl+F)">
@@ -408,6 +441,11 @@
   const dropOverlay = document.getElementById('drop-overlay');
   const btnUndo = document.getElementById('btn-undo');
   const btnRedo = document.getElementById('btn-redo');
+  const fontSizeSelect = document.getElementById('font-size-select');
+  const btnFontBold = document.getElementById('btn-font-bold');
+  const btnFontItalic = document.getElementById('btn-font-italic');
+
+  let elementFontStyles = {};
 
   function showToast(msg) {
     toast.textContent = msg;
@@ -492,6 +530,12 @@
     modeler.on('commandStack.changed', () => {
       if (!isDirty) setFileState(currentFileName, currentFileHandle, true);
       updateUndoRedoState();
+      applyAllElementFontStyles();
+    });
+
+    // Atualiza controles de fonte na toolbar quando a seleção de elementos muda
+    modeler.on('selection.changed', (e) => {
+      updateFontToolbarFromSelection(e.newSelection || []);
     });
 
     // Assegura roteamento ortogonal em 90° para novas conexões criadas no canvas
@@ -526,8 +570,11 @@
     async function loadXML(xml, name = "diagrama.bpmn", handle = null) {
       try {
         clearError();
+        elementFontStyles = {};
+        updateFontToolbarFromSelection([]);
         await modeler.importXML(xml);
         enforceOrthogonalConnections();
+        applyAllElementFontStyles();
         try { modeler.get('commandStack').clear(); } catch (e) {}
         setFileState(name, handle, false);
         updateUndoRedoState();
@@ -679,6 +726,196 @@
       }
     }
 
+    // Mapa de estilos tipográficos específicos por elemento: elementId -> fontSize, isBold, isItalic
+    function getSelectedElements() {
+      if (!modeler) return [];
+      try {
+        const selection = modeler.get('selection').get();
+        return selection || [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    // Injeta/atualiza regras de estilo CSS específicas para os elementos estilizados
+    function applyAllElementFontStyles() {
+      const keys = Object.keys(elementFontStyles);
+      let cssRules = '';
+
+      const elementRegistry = modeler ? modeler.get('elementRegistry') : null;
+
+      keys.forEach(id => {
+        const s = elementFontStyles[id];
+        if (!s) return;
+        const weight = s.isBold ? 'bold' : 'normal';
+        const style = s.isItalic ? 'italic' : 'normal';
+        const size = s.fontSize || '12px';
+
+        // Determina ID do rótulo externo (se existir)
+        let labelId = id + '_label';
+        if (elementRegistry) {
+          try {
+            const shape = elementRegistry.get(id);
+            if (shape && shape.label && shape.label.id) {
+              labelId = shape.label.id;
+            }
+          } catch (e) {}
+        }
+
+        cssRules += `
+          g[data-element-id="${id}"] text,
+          g[data-element-id="${id}"] text tspan,
+          g[data-element-id="${id}"] .djs-label,
+          g[data-element-id="${id}"] .djs-label tspan,
+          g[data-element-id="${labelId}"] text,
+          g[data-element-id="${labelId}"] text tspan,
+          g[data-element-id="${labelId}"] .djs-label,
+          g[data-element-id="${labelId}"] .djs-label tspan {
+            font-size: ${size} !important;
+            font-weight: ${weight} !important;
+            font-style: ${style} !important;
+          }
+        `;
+
+        // Aplica também diretamente no DOM gráfico dos nós correspondentes
+        if (elementRegistry) {
+          try {
+            const gfx = elementRegistry.getGraphics(id);
+            if (gfx) {
+              gfx.querySelectorAll('text, tspan').forEach(t => {
+                t.style.setProperty('font-size', size, 'important');
+                t.style.setProperty('font-weight', weight, 'important');
+                t.style.setProperty('font-style', style, 'important');
+              });
+            }
+            if (labelId && labelId !== id) {
+              const labelGfx = elementRegistry.getGraphics(labelId);
+              if (labelGfx) {
+                labelGfx.querySelectorAll('text, tspan').forEach(t => {
+                  t.style.setProperty('font-size', size, 'important');
+                  t.style.setProperty('font-weight', weight, 'important');
+                  t.style.setProperty('font-style', style, 'important');
+                });
+              }
+            }
+          } catch (e) {}
+        }
+      });
+
+      // 1. Atualiza folha de estilo no documento para visualização imediata no canvas
+      let styleTag = document.getElementById('diagram-font-override');
+      if (!styleTag) {
+        styleTag = document.createElement('style');
+        styleTag.id = 'diagram-font-override';
+        document.head.appendChild(styleTag);
+      }
+      styleTag.textContent = cssRules;
+
+      // 2. Injeta bloco de estilo no SVG <defs> para exportações SVG e PNG
+      try {
+        const svgEl = document.querySelector('#canvas svg');
+        if (svgEl) {
+          let defs = svgEl.querySelector('defs');
+          if (!defs) {
+            defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            svgEl.insertBefore(defs, svgEl.firstChild);
+          }
+          let svgStyle = defs.querySelector('#svg-font-style');
+          if (!svgStyle) {
+            svgStyle = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            svgStyle.setAttribute('id', 'svg-font-style');
+            svgStyle.setAttribute('type', 'text/css');
+            defs.appendChild(svgStyle);
+          }
+          svgStyle.textContent = cssRules;
+        }
+      } catch (e) {
+        console.warn('Erro ao atualizar estilos tipográficos do SVG:', e);
+      }
+    }
+
+    const applyDiagramFont = applyAllElementFontStyles;
+
+    function updateFontToolbarFromSelection(selection) {
+      if (!selection || selection.length === 0) {
+        fontSizeSelect.value = '12px';
+        btnFontBold.classList.remove('active');
+        btnFontItalic.classList.remove('active');
+        return;
+      }
+      if (selection.length === 1) {
+        const s = elementFontStyles[selection[0].id];
+        if (s) {
+          fontSizeSelect.value = s.fontSize || '12px';
+          btnFontBold.classList.toggle('active', !!s.isBold);
+          btnFontItalic.classList.toggle('active', !!s.isItalic);
+          return;
+        }
+      }
+      const allBold = selection.every(el => elementFontStyles[el.id] && elementFontStyles[el.id].isBold);
+      const allItalic = selection.every(el => elementFontStyles[el.id] && elementFontStyles[el.id].isItalic);
+      btnFontBold.classList.toggle('active', allBold);
+      btnFontItalic.classList.toggle('active', allItalic);
+      const firstSize = (elementFontStyles[selection[0].id] && elementFontStyles[selection[0].id].fontSize) || '12px';
+      const sameSize = selection.every(el => ((elementFontStyles[el.id] && elementFontStyles[el.id].fontSize) || '12px') === firstSize);
+      fontSizeSelect.value = sameSize ? firstSize : '12px';
+    }
+
+    function setFontSize(val) {
+      const selection = getSelectedElements();
+      if (selection.length === 0) {
+        showToast('Selecione um ou mais elementos para alterar o tamanho da fonte.');
+        fontSizeSelect.value = '12px';
+        return;
+      }
+      selection.forEach(el => {
+        if (!elementFontStyles[el.id]) {
+          elementFontStyles[el.id] = { fontSize: '12px', isBold: false, isItalic: false };
+        }
+        elementFontStyles[el.id].fontSize = val;
+      });
+      applyAllElementFontStyles();
+      showToast(`Tamanho da fonte (${val}) aplicado a ${selection.length} elemento(s).`);
+    }
+
+    function toggleBold() {
+      const selection = getSelectedElements();
+      if (selection.length === 0) {
+        showToast('Selecione um ou mais elementos para alternar negrito.');
+        return;
+      }
+      const allBold = selection.every(el => elementFontStyles[el.id] && elementFontStyles[el.id].isBold);
+      const newBold = !allBold;
+      selection.forEach(el => {
+        if (!elementFontStyles[el.id]) {
+          elementFontStyles[el.id] = { fontSize: '12px', isBold: false, isItalic: false };
+        }
+        elementFontStyles[el.id].isBold = newBold;
+      });
+      btnFontBold.classList.toggle('active', newBold);
+      applyAllElementFontStyles();
+      showToast(`Negrito ${newBold ? 'ativado' : 'desativado'} em ${selection.length} elemento(s).`);
+    }
+
+    function toggleItalic() {
+      const selection = getSelectedElements();
+      if (selection.length === 0) {
+        showToast('Selecione um ou mais elementos para alternar itálico.');
+        return;
+      }
+      const allItalic = selection.every(el => elementFontStyles[el.id] && elementFontStyles[el.id].isItalic);
+      const newItalic = !allItalic;
+      selection.forEach(el => {
+        if (!elementFontStyles[el.id]) {
+          elementFontStyles[el.id] = { fontSize: '12px', isBold: false, isItalic: false };
+        }
+        elementFontStyles[el.id].isItalic = newItalic;
+      });
+      btnFontItalic.classList.toggle('active', newItalic);
+      applyAllElementFontStyles();
+      showToast(`Itálico ${newItalic ? 'ativado' : 'desativado'} em ${selection.length} elemento(s).`);
+    }
+
     // Desfazer / Refazer
     function undoAction() {
       try {
@@ -736,6 +973,7 @@
     // Exportação SVG
     async function exportSVG() {
       try {
+        applyDiagramFont();
         const { svg } = await modeler.saveSVG({ format: true });
         const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -756,6 +994,7 @@
     // Exportação PNG em Alta Resolução (2x retina)
     async function exportPNG() {
       try {
+        applyDiagramFont();
         const { svg } = await modeler.saveSVG();
         const img = new Image();
         const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
@@ -817,6 +1056,9 @@
     document.getElementById('btn-zoom-reset').addEventListener('click', zoomReset);
     document.getElementById('btn-export-svg').addEventListener('click', exportSVG);
     document.getElementById('btn-export-png').addEventListener('click', exportPNG);
+    fontSizeSelect.addEventListener('change', (e) => setFontSize(e.target.value));
+    btnFontBold.addEventListener('click', toggleBold);
+    btnFontItalic.addEventListener('click', toggleItalic);
 
     // Eventos de Cores
     document.querySelectorAll('.color-dot').forEach(dot => {
@@ -865,7 +1107,7 @@
       }
     });
 
-    // Atalhos de teclado (Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Y, Ctrl+F)
+    // Atalhos de teclado (Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Y, Ctrl+F, Ctrl+B, Ctrl+I)
     window.addEventListener('keydown', (e) => {
       const isCtrlOrMeta = e.ctrlKey || e.metaKey;
       if (isCtrlOrMeta && e.key.toLowerCase() === 's') {
@@ -883,15 +1125,46 @@
       } else if (isCtrlOrMeta && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         toggleSearch();
+      } else if (isCtrlOrMeta && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        toggleBold();
+      } else if (isCtrlOrMeta && e.key.toLowerCase() === 'i') {
+        e.preventDefault();
+        toggleItalic();
       }
     });
 
-    // Carga inicial: carregar o teste 06 (ônibus completo) como padrão
-    if (PRESETS['06-bus-boarding-process.bpmn']) {
-      loadXML(PRESETS['06-bus-boarding-process.bpmn'], '06-bus-boarding-process.bpmn', null);
-    } else {
-      newDiagram();
+    // Carga inicial
+    const urlParams = new URLSearchParams(window.location.search);
+    const fileParam = urlParams.get('file');
+
+    async function initEditor() {
+      applyDiagramFont();
+      if (fileParam) {
+        currentFileName = fileParam;
+        setFileState(fileParam, null, false);
+        try {
+          const res = await fetch(fileParam);
+          if (res.ok) {
+            const xml = await res.text();
+            await loadXML(xml, fileParam, null);
+            return;
+          }
+        } catch (e) {
+          console.warn('Falha no fetch de arquivo local (possível CORS em file://):', e);
+        }
+        showToast(`Arquivo '${fileParam}' configurado. Use '📂 Abrir' ou arraste o arquivo para carregar.`);
+        return;
+      }
+
+      if (PRESETS['06-bus-boarding-process.bpmn']) {
+        loadXML(PRESETS['06-bus-boarding-process.bpmn'], '06-bus-boarding-process.bpmn', null);
+      } else {
+        newDiagram();
+      }
     }
+
+    initEditor();
   }
 </script>
 </body>

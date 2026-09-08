@@ -93,3 +93,46 @@ def test_template_html_has_task_resize_and_90deg_routing(project_root: Path):
     assert "gridSnapping" in content
     assert "layoutConnection" in content
     assert "btn-route-90" in content
+
+
+def test_editor_html_has_font_styling_controls(project_root: Path):
+    """Verify editor.html includes element-specific typography controls and logic."""
+    editor_path = project_root / "editor.html"
+    content = editor_path.read_text(encoding="utf-8")
+
+    assert "font-size-select" in content
+    assert "btn-font-bold" in content
+    assert "btn-font-italic" in content
+    assert "elementFontStyles" in content
+    assert "getSelectedElements" in content
+    assert "applyAllElementFontStyles" in content
+    assert "updateFontToolbarFromSelection" in content
+    assert "data-element-id" in content
+    assert "setFontSize" in content
+    assert "toggleBold" in content
+    assert "toggleItalic" in content
+    assert "svg-font-style" in content
+
+
+def test_template_html_has_font_styling_controls(project_root: Path):
+    """Verify assets/bpmn-editor-template.html includes element-specific typography controls."""
+    template_path = project_root / "assets" / "bpmn-editor-template.html"
+    content = template_path.read_text(encoding="utf-8")
+
+    assert "font-size-select" in content
+    assert "btn-font-bold" in content
+    assert "btn-font-italic" in content
+    assert "elementFontStyles" in content
+    assert "getSelectedElements" in content
+    assert "applyAllElementFontStyles" in content
+    assert "updateFontToolbarFromSelection" in content
+    assert "data-element-id" in content
+
+
+def test_editor_html_has_file_param_query_support(project_root: Path):
+    """Verify editor.html supports loading or configuring a file via ?file= query parameter."""
+    editor_path = project_root / "editor.html"
+    content = editor_path.read_text(encoding="utf-8")
+
+    assert "urlParams.get('file')" in content
+    assert "initEditor" in content

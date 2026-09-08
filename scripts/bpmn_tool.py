@@ -26,6 +26,8 @@ Both subcommands share the same tag list and graph-building logic
 a flow node.
 """
 import argparse
+from pathlib import Path
+import shutil
 import sys
 from xml.etree import ElementTree as ET
 
@@ -352,7 +354,37 @@ def compute_diagram(process_el):
     return diagram
 
 
-def run_layout(input_path, output_path):
+def copy_editor_if_needed(target_dir):
+    """
+    Copy editor.html from the skill root to the project directory if it does not
+    already exist there. Do not overwrite existing files, and do not pollute
+    the skill's internal test/reference directories.
+    """
+    root_dir = Path(__file__).resolve().parent.parent
+    source_editor = root_dir / "editor.html"
+    if not source_editor.exists():
+        return None
+
+    target_dir = Path(target_dir).resolve()
+    # Skip if target_dir is the root of the skill or internal test/reference directories
+    internal_dirs = {
+        root_dir.resolve(),
+        (root_dir / "tests").resolve(),
+        (root_dir / "references").resolve(),
+    }
+    if target_dir in internal_dirs:
+        return None
+
+    target_editor = target_dir / "editor.html"
+    if not target_editor.exists():
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_editor, target_editor)
+        print(f"[OK] Copied central editor to project directory: {target_editor}")
+        return target_editor
+    return target_editor
+
+
+def run_layout(input_path, output_path=None, copy_editor=True):
     tree = _parse_or_die(input_path)
     root = tree.getroot()
     for diagram in root.findall(f"{{{BPMNDI_NS}}}BPMNDiagram"):
@@ -364,8 +396,12 @@ def run_layout(input_path, output_path):
     for process_el in processes:
         root.append(compute_diagram(process_el))
     out_path = output_path or input_path
+    out_file = Path(out_path).resolve()
+    out_file.parent.mkdir(parents=True, exist_ok=True)
     tree.write(out_path, encoding="UTF-8", xml_declaration=True)
     print(f"[OK] Wrote layout for {len(processes)} process(es) to {out_path}")
+    if copy_editor:
+        copy_editor_if_needed(out_file.parent)
 
 
 # ---------------------------------------------------------------------------
@@ -563,16 +599,24 @@ def main():
     p_layout = sub.add_parser("layout", help="Compute BPMNDiagram DI for a .bpmn file's process(es).")
     p_layout.add_argument("input", help="Path to the .bpmn file to lay out.")
     p_layout.add_argument("-o", "--output", help="Output path (default: overwrite the input file).")
+    p_layout.add_argument("--no-copy-editor", dest="copy_editor", action="store_false", default=True,
+                           help="Do not copy editor.html to the project directory.")
 
     p_validate = sub.add_parser("validate", help="Run well-formedness + control-flow lint on a .bpmn file.")
     p_validate.add_argument("file", help="Path to the .bpmn file to validate.")
 
+    p_copy = sub.add_parser("copy-editor", help="Copy editor.html to a project directory if not already present.")
+    p_copy.add_argument("target_dir", help="Target project directory.")
+
     args = parser.parse_args()
 
     if args.command == "layout":
-        run_layout(args.input, args.output)
+        run_layout(args.input, args.output, copy_editor=args.copy_editor)
     elif args.command == "validate":
         sys.exit(0 if validate(args.file) else 1)
+    elif args.command == "copy-editor":
+        copied = copy_editor_if_needed(args.target_dir)
+        sys.exit(0 if copied else 1)
 
 
 if __name__ == "__main__":
