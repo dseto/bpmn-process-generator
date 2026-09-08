@@ -1202,39 +1202,58 @@
     async function initEditor() {
       applyDiagramFont();
 
+      let baseParam = fileParam;
+      if (fileParam) {
+        const lastSlash = Math.max(fileParam.lastIndexOf('/'), fileParam.lastIndexOf('\\'));
+        if (lastSlash >= 0) {
+          baseParam = fileParam.substring(lastSlash + 1);
+        }
+      }
+
       // 1. Se foi passado ?file=..., prioriza o arquivo solicitado
       if (fileParam) {
-        currentFileName = fileParam;
-        setFileState(fileParam, null, false);
+        currentFileName = baseParam || fileParam;
+        setFileState(currentFileName, null, false);
 
-        // Se o arquivo solicitado corresponder ao diagrama padrão embutido, carrega diretamente (sem CORS)
-        if (DEFAULT_DIAGRAM_NAME && fileParam === DEFAULT_DIAGRAM_NAME && DEFAULT_DIAGRAM_XML) {
+        // Se o arquivo solicitado corresponder ao diagrama padrão embutido (por nome exato ou nome base)
+        if (DEFAULT_DIAGRAM_NAME && (fileParam === DEFAULT_DIAGRAM_NAME || baseParam === DEFAULT_DIAGRAM_NAME) && DEFAULT_DIAGRAM_XML) {
           await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
           return;
         }
 
-        // Se corresponder a um dos presets embutidos, carrega do preset
-        if (PRESETS[fileParam]) {
-          await loadXML(PRESETS[fileParam], fileParam, null);
+        // Se corresponder a um dos presets embutidos
+        const presetKey = PRESETS[fileParam] ? fileParam : (baseParam && PRESETS[baseParam] ? baseParam : null);
+        if (presetKey) {
+          await loadXML(PRESETS[presetKey], presetKey, null);
           return;
         }
 
-        // Tenta fetch local
+        // Tenta fetch local (funciona se servido via http/https ou servidor dev)
         try {
           const res = await fetch(fileParam);
           if (res.ok) {
             const xml = await res.text();
-            await loadXML(xml, fileParam, null);
+            await loadXML(xml, currentFileName, null);
             return;
           }
         } catch (e) {
           console.warn('Falha no fetch de arquivo local (possível CORS em file://):', e);
         }
+
+        // Se há diagrama padrão embutido neste editor do projeto, carrega-o para a tela não ficar em branco
+        if (DEFAULT_DIAGRAM_NAME && DEFAULT_DIAGRAM_XML) {
+          await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
+          showToast(`Carregado diagrama padrão '${DEFAULT_DIAGRAM_NAME}'.`);
+          return;
+        }
+
+        // Se não há diagrama embutido e fetch falhou, inicializa novo diagrama limpo para a interface não ficar em branco
+        newDiagram();
         showToast(`Arquivo '${fileParam}' configurado. Use '📂 Abrir' ou arraste o arquivo para carregar.`);
         return;
       }
 
-      // 2. Se há um diagrama padrão configurado para este editor (quando copiado no projeto)
+      // 2. Se não foi passado ?file=, mas há um diagrama padrão configurado (editor copiado no projeto)
       if (DEFAULT_DIAGRAM_NAME && DEFAULT_DIAGRAM_XML) {
         await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
         return;

@@ -417,27 +417,23 @@ def copy_editor_if_needed(target_dir, bpmn_path=None):
             diagram_xml = bpmn_file.read_text(encoding="utf-8")
 
             name_json = json.dumps(diagram_name, ensure_ascii=False)
-            xml_json = re.sub(
-                r'</script', r'<\\/script',
-                json.dumps(diagram_xml, ensure_ascii=False),
-                flags=re.IGNORECASE
-            )
+            xml_json = json.dumps(diagram_xml, ensure_ascii=False).replace('</script', r'<\/script').replace('</SCRIPT', r'<\/SCRIPT')
 
             # 1. Configura diagrama padrão embutido
-            content = content.replace('let DEFAULT_DIAGRAM_NAME = "";', f'let DEFAULT_DIAGRAM_NAME = {name_json};')
-            content = content.replace('let DEFAULT_DIAGRAM_XML = null;', f'let DEFAULT_DIAGRAM_XML = {xml_json};')
+            content = re.sub(r'let DEFAULT_DIAGRAM_NAME = .*?;', lambda _: f'let DEFAULT_DIAGRAM_NAME = {name_json};', content)
+            content = re.sub(r'let DEFAULT_DIAGRAM_XML = .*?;', lambda _: f'let DEFAULT_DIAGRAM_XML = {xml_json};', content)
 
             # 2. Atualiza estado e título visual
-            content = content.replace('let currentFileName = "diagrama.bpmn";', f'let currentFileName = {name_json};')
-            content = re.sub(r'<span id="current-filename">.*?</span>', f'<span id="current-filename">{diagram_name}</span>', content)
-            content = content.replace('<title>BPMN Editor Central</title>', f'<title>BPMN Editor — {diagram_name}</title>')
+            content = re.sub(r'let currentFileName = .*?;', lambda _: f'let currentFileName = {name_json};', content)
+            content = re.sub(r'<span id="current-filename">.*?</span>', lambda _: f'<span id="current-filename">{diagram_name}</span>', content)
+            content = re.sub(r'<title>.*?</title>', lambda _: f'<title>BPMN Editor — {diagram_name}</title>', content)
 
             # 3. Presets limpos: contém estritamente o diagrama gerado e blank, eliminando exemplos da skill
             presets_replacement = json.dumps({"_blank": BLANK_TEMPLATE, diagram_name: diagram_xml}, ensure_ascii=False)
-            presets_replacement = re.sub(r'</script', r'<\\/script', presets_replacement, flags=re.IGNORECASE)
+            presets_replacement = presets_replacement.replace('</script', r'<\/script').replace('</SCRIPT', r'<\/SCRIPT')
             content = re.sub(
                 r'/\*PRESETS_START\*/.*?/\*PRESETS_END\*/',
-                f'/*PRESETS_START*/\n  const PRESETS = {presets_replacement};\n  /*PRESETS_END*/',
+                lambda _: f'/*PRESETS_START*/\n  const PRESETS = {presets_replacement};\n  /*PRESETS_END*/',
                 content,
                 flags=re.DOTALL
             )
@@ -448,7 +444,7 @@ def copy_editor_if_needed(target_dir, bpmn_path=None):
     </select>'''
             content = re.sub(
                 r'<!--PRESET_SELECT_START-->.*?<!--PRESET_SELECT_END-->',
-                f'<!--PRESET_SELECT_START-->\n    {new_select}\n    <!--PRESET_SELECT_END-->',
+                lambda _: f'<!--PRESET_SELECT_START-->\n    {new_select}\n    <!--PRESET_SELECT_END-->',
                 content,
                 flags=re.DOTALL
             )
@@ -456,9 +452,10 @@ def copy_editor_if_needed(target_dir, bpmn_path=None):
     if not diagram_name:
         # Se nenhum diagrama foi especificado, remove qualquer preset de exemplo da skill
         presets_replacement = json.dumps({"_blank": BLANK_TEMPLATE}, ensure_ascii=False)
+        presets_replacement = presets_replacement.replace('</script', r'<\/script').replace('</SCRIPT', r'<\/SCRIPT')
         content = re.sub(
             r'/\*PRESETS_START\*/.*?/\*PRESETS_END\*/',
-            f'/*PRESETS_START*/\n  const PRESETS = {presets_replacement};\n  /*PRESETS_END*/',
+            lambda _: f'/*PRESETS_START*/\n  const PRESETS = {presets_replacement};\n  /*PRESETS_END*/',
             content,
             flags=re.DOTALL
         )
@@ -467,7 +464,7 @@ def copy_editor_if_needed(target_dir, bpmn_path=None):
     </select>'''
         content = re.sub(
             r'<!--PRESET_SELECT_START-->.*?<!--PRESET_SELECT_END-->',
-            f'<!--PRESET_SELECT_START-->\n    {new_select}\n    <!--PRESET_SELECT_END-->',
+            lambda _: f'<!--PRESET_SELECT_START-->\n    {new_select}\n    <!--PRESET_SELECT_END-->',
             content,
             flags=re.DOTALL
         )

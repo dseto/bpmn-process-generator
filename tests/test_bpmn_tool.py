@@ -1,4 +1,6 @@
+import json
 from pathlib import Path
+import re
 from xml.etree import ElementTree as ET
 import pytest
 
@@ -259,6 +261,14 @@ def test_copy_editor_sets_default_diagram_and_strips_skill_examples(tmp_path: Pa
     assert "06-bus-boarding-process.bpmn" not in content
     assert "03-order-fulfillment.bpmn" not in content
     assert "02-credit-card-approval.bpmn" not in content
+
+    # Verify that PRESETS in JavaScript is valid JSON and not corrupted by newlines
+    m = re.search(r'const PRESETS = (\{.*?\});', content, re.DOTALL)
+    assert m is not None, "const PRESETS not found in copied editor"
+    presets_data = json.loads(m.group(1))
+    assert "lead-qualification.bpmn" in presets_data
+    assert "_blank" in presets_data
+    assert "06-bus-boarding-process.bpmn" not in presets_data
 
 
 def test_run_layout_with_no_copy_editor(tmp_path: Path):

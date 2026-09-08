@@ -173,3 +173,14 @@ def test_template_html_toolbar_is_responsive_and_accessible(project_root: Path):
     assert "flex-wrap: wrap" in content
     assert "flex: 1 1 auto" in content
     assert "toolbarEl.addEventListener('wheel'" in content
+
+
+def test_editor_html_init_editor_resilience(project_root: Path):
+    """Verify editor.html extracts baseParam, handles full paths, and never stays blank on fetch failure."""
+    editor_path = project_root / "editor.html"
+    content = editor_path.read_text(encoding="utf-8")
+
+    assert "baseParam" in content
+    assert "fileParam === DEFAULT_DIAGRAM_NAME || baseParam === DEFAULT_DIAGRAM_NAME" in content
+    assert "loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null)" in content
+    assert "newDiagram()" in content
