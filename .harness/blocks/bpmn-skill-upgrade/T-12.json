@@ -1,8 +1,0 @@
-{
-  "feature_id": "T-12",
-  "contract": "bpmn-skill-upgrade",
-  "needs": "liberar 'python scripts/generate_editor_html.py' no .harness/harness.yaml (extra_allowed_commands) ou rodar o comando no terminal do usuario: editor.html e build output do gerador e precisa ser regerado para as tarefas do editor (T-12 a T-16)",
-  "recorded_at": "2026-09-09T11:05:31.133833+00:00",
-  "watch": "editor.html",
-  "watch_hash": "sha256:e06809a87f568b23645e07af9d338326ba4e2002efed88675bcf2c10f7139756"
-}

@@ -8,6 +8,7 @@ governance:
     - python -m harness.cli
     - env:PYTHONPATH =
     - python scripts/verify_tests.py
+    - python scripts/generate_editor_html.py
     
 verification:
   enforce_tdd: false

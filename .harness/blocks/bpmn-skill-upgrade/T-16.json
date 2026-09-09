@@ -1,8 +1,0 @@
-{
-  "feature_id": "T-16",
-  "contract": "bpmn-skill-upgrade",
-  "needs": "duas acoes humanas: (1) colocar os arquivos do bpmn-js@17 em assets/vendor/ (bpmn-modeler.production.min.js, diagram-js.css, bpmn.css e a fonte bpmn.woff) - o runtime floor bloqueia download pela rede, conforme o unknown registrado no spec; (2) liberar 'python scripts/generate_editor_html.py' para regerar editor.html",
-  "recorded_at": "2026-09-09T11:09:15.127065+00:00",
-  "watch": "assets/vendor",
-  "watch_hash": "absent"
-}
