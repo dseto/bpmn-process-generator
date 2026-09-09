@@ -1,0 +1,14 @@
+{
+  "feature_id": "T-06",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "O validador acusa erros estruturais que hoje passam despercebidos e reprovam o diagrama",
+  "files": [
+    "scripts/lint_rules.py",
+    "tests/test_lint_rules.py",
+    "references/example-broken.bpmn"
+  ],
+  "verify_cmd": "pytest tests/test_lint_rules.py -q",
+  "recorded_at": "2026-09-09T11:40:55.384312+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:e576c76442b17609d61bf81fe6d28934869f95d3728ba345addae5e5ccef123d"
+}

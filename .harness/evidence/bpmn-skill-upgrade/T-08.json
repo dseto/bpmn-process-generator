@@ -1,0 +1,13 @@
+{
+  "feature_id": "T-08",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "O resultado da validação pode ser lido em JSON pelo assistente e endurecido para tratar avisos como falha",
+  "files": [
+    "scripts/bpmn_tool.py",
+    "tests/test_validate_output.py"
+  ],
+  "verify_cmd": "pytest tests/test_validate_output.py -q",
+  "recorded_at": "2026-09-09T11:41:40.789713+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:39cf7bd3a59d80383d0164e4ea420d9233216d32dc7e4a473054e3fd2492b697"
+}

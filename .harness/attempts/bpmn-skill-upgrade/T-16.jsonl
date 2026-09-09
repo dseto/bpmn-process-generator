@@ -1,0 +1,4 @@
+{"result": "fail", "contract": "bpmn-skill-upgrade", "feature_id": "T-16", "recorded_at": "2026-09-09T11:20:24.826006+00:00", "verify_cmd": "pytest tests/test_editor_offline.py -q", "exit_code": 1, "failure_line": "============================= test session starts =============================", "failure_signature": "2211f63d7753", "files_hash": "sha256:5c7fb8783bda5727a2210764129e48007412ee36fabde07984e5d9392e0b20ff", "classification": "structural"}
+{"result": "pass", "recorded_at": "2026-09-09T11:20:50.683364+00:00", "files_hash": "sha256:bdd4ead907af79e69812f7869bf529f359a9c80a076312d011d8a8969a9258be"}
+{"result": "pass", "recorded_at": "2026-09-09T11:33:03.925501+00:00", "files_hash": "sha256:8b657a2aace2f4aa5d1b373a67c8383258bb07f8e5119fbb7316ad227a334658"}
+{"result": "pass", "recorded_at": "2026-09-09T11:41:45.273033+00:00", "files_hash": "sha256:ab6e4b41c30272712cbcbffd6956fa42071ea15d553624952a1f1a426012e049"}

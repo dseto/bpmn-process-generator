@@ -1,0 +1,15 @@
+{
+  "feature_id": "T-01",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "Descrever um processo num spec JSON simples gera um arquivo BPMN com ids legíveis e referências de fluxo sempre coerentes",
+  "files": [
+    "scripts/bpmn_build.py",
+    "tests/test_bpmn_build.py",
+    "references/process-spec.md",
+    "references/example-spec.json"
+  ],
+  "verify_cmd": "pytest tests/test_bpmn_build.py -q",
+  "recorded_at": "2026-09-09T10:42:24.080142+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:e33c086efe333ed418092dc08a5b8e7ca8b063852fedc7e8d957c71428509d64"
+}

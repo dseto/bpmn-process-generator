@@ -1,0 +1,13 @@
+{
+  "feature_id": "T-09",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "Problemas mecânicos do arquivo são corrigidos automaticamente, com prévia do que muda e sem inventar conteúdo do processo",
+  "files": [
+    "scripts/bpmn_tool.py",
+    "tests/test_fix_command.py"
+  ],
+  "verify_cmd": "pytest tests/test_fix_command.py -q",
+  "recorded_at": "2026-09-09T11:41:41.913200+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:e0f3065b21609c253865876c93359be99d4b477bb62f860b8fe3d8b8b11df693"
+}

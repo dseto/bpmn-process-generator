@@ -1,0 +1,16 @@
+{
+  "feature_id": "T-16",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "O editor abre e renderiza o diagrama em máquina sem internet",
+  "files": [
+    "scripts/generate_editor_html.py",
+    "editor.html",
+    "assets/vendor/README.md",
+    "tests/test_editor_offline.py",
+    "tests/test_build_editor.py"
+  ],
+  "verify_cmd": "pytest tests/test_editor_offline.py -q",
+  "recorded_at": "2026-09-09T11:42:00.113381+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:ab6e4b41c30272712cbcbffd6956fa42071ea15d553624952a1f1a426012e049"
+}

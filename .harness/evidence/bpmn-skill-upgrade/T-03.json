@@ -1,0 +1,13 @@
+{
+  "feature_id": "T-03",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "Um único comando entrega o diagrama pronto: gera, posiciona, valida e deixa o editor na pasta do projeto",
+  "files": [
+    "scripts/bpmn_build.py",
+    "tests/test_bpmn_build_cli.py"
+  ],
+  "verify_cmd": "pytest tests/test_bpmn_build_cli.py -q",
+  "recorded_at": "2026-09-09T10:42:23.075045+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:bce911bb49e04d97fd830f6fd3373ec72d01d49e1d6d2d94d8d6f5db768cb16b"
+}

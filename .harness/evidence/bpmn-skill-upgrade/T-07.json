@@ -1,0 +1,13 @@
+{
+  "feature_id": "T-07",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "O validador aponta problemas de qualidade de modelagem como aviso, sem reprovar o diagrama",
+  "files": [
+    "scripts/lint_rules.py",
+    "tests/test_lint_rules.py"
+  ],
+  "verify_cmd": "pytest tests/test_lint_rules.py -q",
+  "recorded_at": "2026-09-09T11:41:21.045291+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:b15a442a7c6e1ac92b2cdc56a41ccee254370ab6f933cf1c86d830d69816d2ed"
+}

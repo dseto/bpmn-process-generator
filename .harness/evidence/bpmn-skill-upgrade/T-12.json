@@ -1,0 +1,15 @@
+{
+  "feature_id": "T-12",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "No editor é possível alterar nome, documentação, tipo do elemento e a condição de cada fluxo por um painel",
+  "files": [
+    "scripts/generate_editor_html.py",
+    "editor.html",
+    "tests/test_editor_features.py",
+    "tests/test_build_editor.py"
+  ],
+  "verify_cmd": "pytest tests/test_editor_features.py -q",
+  "recorded_at": "2026-09-09T11:41:46.240214+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:e4afee3685a3742cf1f0ff38507f71ce988cae6594e31865ac31d24024a3e52b"
+}

@@ -1,0 +1,13 @@
+{
+  "feature_id": "T-04",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "Um diagrama existente pode ser reconvertido em spec e regerado sem perder informação do processo",
+  "files": [
+    "scripts/bpmn_tool.py",
+    "tests/test_spec_roundtrip.py"
+  ],
+  "verify_cmd": "pytest tests/test_spec_roundtrip.py -q",
+  "recorded_at": "2026-09-09T11:41:38.743640+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:2450ce023085cc8770e61f46cfbafff97750ad78e8af5896ac4049d9ac336be1"
+}

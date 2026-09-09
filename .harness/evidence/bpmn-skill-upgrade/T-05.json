@@ -1,0 +1,14 @@
+{
+  "feature_id": "T-05",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "Cada checagem do validador vira uma regra identificável com gravidade própria (erro, aviso, informação)",
+  "files": [
+    "scripts/lint_rules.py",
+    "scripts/bpmn_tool.py",
+    "tests/test_lint_rules.py"
+  ],
+  "verify_cmd": "pytest tests/test_lint_rules.py -q",
+  "recorded_at": "2026-09-09T11:41:39.702177+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:c2d40c631964e95445cb9761e90ed25ae49e3cdaf4b275d049beff93ea778323"
+}
