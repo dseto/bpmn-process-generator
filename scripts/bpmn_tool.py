@@ -26,12 +26,15 @@ Both subcommands share the same tag list and graph-building logic
 a flow node.
 """
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import re
 import shutil
 import sys
 from xml.etree import ElementTree as ET
+
+import lint_rules
 
 BLANK_TEMPLATE = """<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -376,11 +379,53 @@ def compute_diagram(process_el):
     return diagram
 
 
-def copy_editor_if_needed(target_dir, bpmn_path=None):
+EDITOR_VERSION_META = '<meta name="bpmn-editor-version"'
+_VERSION_RE = re.compile(r'<meta\s+name="bpmn-editor-version"\s+content="([^"]*)"')
+_HASH_RE = re.compile(r'(<meta\s+name="bpmn-editor-hash"\s+content=")([^"]*)(")')
+
+
+def editor_version_of(html):
+    """Read the version stamped in an editor.html, or None if it has none."""
+    match = _VERSION_RE.search(html)
+    return match.group(1) if match else None
+
+
+def _version_tuple(version):
+    try:
+        return tuple(int(part) for part in version.split("."))
+    except (AttributeError, ValueError):
+        return ()
+
+
+def _stamp_hash(html):
+    """Fill in the integrity hash of the editor being written to a project."""
+    blanked = _HASH_RE.sub(lambda m: m.group(1) + m.group(3), html)
+    digest = hashlib.sha256(blanked.encode("utf-8")).hexdigest()
+    return _HASH_RE.sub(lambda m: m.group(1) + digest + m.group(3), blanked)
+
+
+def was_edited_locally(html):
+    """
+    True when the project's editor.html no longer matches the hash it was
+    delivered with -- i.e. somebody adjusted it by hand and an automatic
+    refresh would throw that work away.
+    """
+    match = _HASH_RE.search(html)
+    if not match or not match.group(2):
+        return False  # delivered before hashing existed: treat as untouched
+    blanked = _HASH_RE.sub(lambda m: m.group(1) + m.group(3), html)
+    return hashlib.sha256(blanked.encode("utf-8")).hexdigest() != match.group(2)
+
+
+def copy_editor_if_needed(target_dir, bpmn_path=None, force=False):
     """
     Copy editor.html from the skill root to the project directory, configuring it to
     point by default to the generated BPMN diagram. Under no circumstances may it
     point to an example diagram from the skill repository.
+
+    A copy already in the project is refreshed so the project follows the skill
+    as it improves -- unless it carries local edits, which are preserved and
+    reported instead (`force=True` overwrites them on purpose).
     """
     root_dir = Path(__file__).resolve().parent.parent
     source_editor = root_dir / "editor.html"
@@ -398,6 +443,17 @@ def copy_editor_if_needed(target_dir, bpmn_path=None):
         return None
 
     target_editor = target_dir / "editor.html"
+
+    if target_editor.exists() and not force:
+        existing = target_editor.read_text(encoding="utf-8")
+        if was_edited_locally(existing):
+            local_version = editor_version_of(existing)
+            skill_version = editor_version_of(source_editor.read_text(encoding="utf-8"))
+            outdated = _version_tuple(local_version) < _version_tuple(skill_version)
+            print(f"[KEEP] {target_editor} has local edits and was not overwritten"
+                  + (f" (it is on {local_version}, the skill ships {skill_version})" if outdated else "")
+                  + " -- rerun with --force to replace it with the current editor.")
+            return target_editor
 
     # If bpmn_path is not specified, discover if there is a .bpmn file in target_dir
     if bpmn_path is None:
@@ -470,7 +526,7 @@ def copy_editor_if_needed(target_dir, bpmn_path=None):
         )
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    target_editor.write_text(content, encoding="utf-8")
+    target_editor.write_text(_stamp_hash(content), encoding="utf-8")
     if diagram_name:
         print(f"[OK] Copied and configured editor in project: {target_editor} (default: {diagram_name})")
     else:
@@ -496,6 +552,135 @@ def run_layout(input_path, output_path=None, copy_editor=True):
     print(f"[OK] Wrote layout for {len(processes)} process(es) to {out_path}")
     if copy_editor:
         copy_editor_if_needed(out_file.parent, bpmn_path=out_file)
+
+
+# ---------------------------------------------------------------------------
+# extract (.bpmn -> process spec, the inverse of bpmn_build.py)
+# ---------------------------------------------------------------------------
+
+class ExtractError(Exception):
+    """The file cannot be read back as a process spec."""
+
+
+# An extracted spec is meant to be edited by hand, so it comes out in the short
+# aliases `references/process-spec.md` recommends. Tags absent from this map
+# extract as themselves (`userTask`, `serviceTask`, ...), which is already the
+# short form. Every value here must be a key of bpmn_build.TYPE_ALIASES mapping
+# back to the same tag -- test_spec_roundtrip.py holds that contract.
+PREFERRED_TYPE_ALIAS = {
+    "startEvent": "start",
+    "endEvent": "end",
+    "exclusiveGateway": "xor",
+    "parallelGateway": "and",
+    "inclusiveGateway": "or",
+    "eventBasedGateway": "eventGateway",
+    "intermediateCatchEvent": "catch",
+    "intermediateThrowEvent": "throw",
+    "boundaryEvent": "boundary",
+}
+
+
+def _event_kind(node_el):
+    """<bpmn:timerEventDefinition/> -> 'timer'. Works for any event definition."""
+    for child in node_el:
+        tag = _tag(child)
+        if tag.endswith("EventDefinition"):
+            return tag[: -len("EventDefinition")]
+    return None
+
+
+def extract_spec(source):
+    """
+    Read an existing .bpmn back into the JSON spec that `bpmn_build.py` consumes.
+
+    This closes the loop for "change this process by describing the change":
+    extract the spec from the diagram on disk (hand edits in the editor
+    included), edit the spec, rebuild. Element ids are reused as the spec's
+    internal ids, so a diagram this skill generated rebuilds byte-identical.
+
+    `source` is a path or an already-parsed ElementTree.
+    """
+    if isinstance(source, ET.ElementTree):
+        tree = source
+    else:
+        try:
+            tree = ET.parse(source)
+        except ET.ParseError as e:
+            raise ExtractError(f"'{source}' is not well-formed XML: {e}") from e
+        except OSError as e:
+            raise ExtractError(f"cannot read '{source}': {e}") from e
+
+    root = tree.getroot()
+    processes = _process_elements(root)
+    if not processes:
+        raise ExtractError("no <bpmn:process> element found")
+    process_el = processes[0]
+
+    spec = {"id": process_el.get("id") or "Process_1"}
+    if process_el.get("name"):
+        spec["name"] = process_el.get("name")
+    spec["executable"] = process_el.get("isExecutable") == "true"
+
+    lane_of, lanes = _build_lane_index(process_el)
+    if lanes:
+        spec["lanes"] = [
+            {"id": lane.get("id"), "name": lane.get("name") or lane.get("id")}
+            for lane in lanes
+        ]
+
+    default_flows = set()
+    nodes = []
+    for child in process_el:
+        tag = _tag(child)
+        if tag not in FLOW_NODE_TAGS:
+            continue
+        nid = child.get("id")
+        if not nid:
+            continue
+        node = {"id": nid, "type": PREFERRED_TYPE_ALIAS.get(tag, tag)}
+        if child.get("name"):
+            node["name"] = child.get("name")
+        kind = _event_kind(child)
+        if kind:
+            node["event"] = kind
+        if tag == "boundaryEvent":
+            if child.get("attachedToRef"):
+                node["attachedTo"] = child.get("attachedToRef")
+            if child.get("cancelActivity") == "false":
+                node["interrupting"] = False
+        if lanes and nid in lane_of:
+            node["lane"] = lanes[lane_of[nid]].get("id")
+        if child.get("default"):
+            default_flows.add(child.get("default"))
+        nodes.append(node)
+    spec["nodes"] = nodes
+
+    flows = []
+    for flow_el in process_el.findall("bpmn:sequenceFlow", NS):
+        flow = {"from": flow_el.get("sourceRef"), "to": flow_el.get("targetRef")}
+        if flow_el.get("name"):
+            flow["label"] = flow_el.get("name")
+        condition = flow_el.find("bpmn:conditionExpression", NS)
+        if condition is not None and condition.text:
+            flow["condition"] = condition.text.strip()
+        if flow_el.get("id") in default_flows:
+            flow["default"] = True
+            flow.pop("condition", None)  # a default branch is the "nothing matched" one
+        flows.append(flow)
+    spec["flows"] = flows
+
+    return spec
+
+
+def run_extract(input_path, output_path=None):
+    """Write the extracted spec next to the diagram (or where asked)."""
+    spec = extract_spec(input_path)
+    out_path = Path(output_path) if output_path else Path(input_path).with_name(
+        f"{Path(input_path).stem}-spec.json")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"[OK] Wrote spec for {len(spec['nodes'])} node(s) to {out_path}")
+    return out_path
 
 
 # ---------------------------------------------------------------------------
@@ -538,134 +723,38 @@ def _di_index(root):
 
 
 def stage2_lint(tree):
-    root = tree.getroot()
-    problems = []
-    warnings = []
+    """
+    Run the rule engine and return (problems, warnings) as plain message lists.
 
-    # Duplicate ids anywhere in the document are a total-failure case:
-    # bpmn-js's importXML hard-fails on them before the user sees anything.
-    all_ids = [el.get("id") for el in root.iter() if el.get("id")]
-    counts = {}
-    for eid in all_ids:
-        counts[eid] = counts.get(eid, 0) + 1
-    for eid in sorted(eid for eid, c in counts.items() if c > 1):
-        problems.append(f"duplicate element id '{eid}' used {counts[eid]} times "
-                         f"(bpmn-js will refuse to import this)")
-
-    di = _di_index(root)
-    if not di["has_diagram"]:
-        problems.append("no <bpmndi:BPMNDiagram> found -- the file will open as a "
-                         "completely empty canvas in bpmn-js")
-
-    processes = _process_elements(root)
-    if not processes:
-        problems.append("no <bpmn:process> element found")
-
-    for process in processes:
-        pid = process.get("id", "<unnamed process>")
-        nodes, edges, issues = build_graph(process)
-        for issue in issues:
-            problems.append(f"[{pid}] {issue}")
-
-        for fid, src, tgt in edges:
-            if src not in nodes:
-                problems.append(f"[{pid}] sequenceFlow '{fid}' has sourceRef '{src}' with no matching node")
-            if tgt not in nodes:
-                problems.append(f"[{pid}] sequenceFlow '{fid}' has targetRef '{tgt}' with no matching node")
-
-        if di["has_diagram"]:
-            if pid not in di["plane_elements"]:
-                problems.append(f"[{pid}] no BPMNPlane found with bpmnElement=\"{pid}\"")
-            for nid in nodes:
-                if nid not in di["shape_ids"]:
-                    problems.append(f"[{pid}] flow node '{nid}' has no matching BPMNShape")
-            for fid, _, _ in edges:
-                if fid not in di["edge_ids"]:
-                    problems.append(f"[{pid}] sequenceFlow '{fid}' has no matching BPMNEdge")
-                elif di["edge_waypoints"].get(fid, 0) < 2:
-                    problems.append(f"[{pid}] BPMNEdge for sequenceFlow '{fid}' has fewer than 2 waypoints")
-
-        starts = [nid for nid, n in nodes.items() if n["tag"] == "startEvent"]
-        ends = [nid for nid, n in nodes.items() if n["tag"] == "endEvent"]
-        if not starts:
-            problems.append(f"[{pid}] no startEvent found")
-        if not ends:
-            problems.append(f"[{pid}] no endEvent found")
-
-        # boundaryEvents attach via attachedToRef, not a sequenceFlow -- index
-        # that relationship once so the incoming-flow and reachability checks
-        # below can special-case them.
-        attached_boundary = {}
-        for nid, n in nodes.items():
-            if n["tag"] == "boundaryEvent" and n.get("attachedToRef"):
-                attached_boundary.setdefault(n["attachedToRef"], []).append(nid)
-                if n["attachedToRef"] not in nodes:
-                    problems.append(f"[{pid}] boundaryEvent '{nid}' has attachedToRef "
-                                     f"'{n['attachedToRef']}' with no matching node")
-
-        for nid, n in nodes.items():
-            tag = n["tag"]
-            in_count = len(n["in_edges"])
-            out_count = len(n["out_edges"])
-            if tag == "boundaryEvent":
-                pass  # no incoming sequenceFlow is normal for these
-            elif tag != "startEvent" and in_count == 0:
-                problems.append(f"[{pid}] node '{nid}' ({tag}) is unreachable (no incoming flow)")
-            if tag != "endEvent" and out_count == 0:
-                problems.append(f"[{pid}] node '{nid}' ({tag}) is a dead end (no outgoing flow)")
-
-        node_ids = set(nodes.keys())
-        if starts:
-            seen = set()
-            stack = list(starts)
-            while stack:
-                cur = stack.pop()
-                if cur in seen:
-                    continue
-                seen.add(cur)
-                for _, t in nodes.get(cur, {}).get("out_edges", []):
-                    stack.append(t)
-                for bnid in attached_boundary.get(cur, []):
-                    stack.append(bnid)
-            for nid in sorted(node_ids - seen):
-                problems.append(f"[{pid}] node '{nid}' is not reachable from any startEvent")
-
-        # Parallel split/join balance: for each gateway that actually splits
-        # (2+ outgoing FLOWS, not 2+ distinct targets -- two flows can share a
-        # target), search forward for a parallel-join gateway (2+ incoming
-        # flows) reachable downstream. An unrelated join elsewhere in the
-        # process, or one upstream of the split, no longer counts.
-        for nid, n in nodes.items():
-            if n["tag"] == "parallelGateway" and len(n["out_edges"]) >= 2:
-                seen2 = set()
-                stack = [t for _, t in n["out_edges"]]
-                found_join = False
-                while stack:
-                    cur = stack.pop()
-                    if cur in seen2:
-                        continue
-                    seen2.add(cur)
-                    other = nodes.get(cur)
-                    if other is None:
-                        continue
-                    if other["tag"] == "parallelGateway" and len(other["in_edges"]) >= 2:
-                        found_join = True
-                        break
-                    stack.extend(t for _, t in other["out_edges"])
-                    stack.extend(attached_boundary.get(cur, []))
-                if not found_join:
-                    warnings.append(
-                        f"[{pid}] parallelGateway '{nid}' splits into {len(n['out_edges'])} branches "
-                        f"with no parallel join reachable downstream -- confirm independent "
-                        f"parallel outcomes are intentional"
-                    )
-
-    return problems, warnings
+    Kept as the historical entry point: `validate`, `scripts/verify_tests.py`
+    and the test suite all speak in terms of these two lists. Callers that need
+    the rule id, the offending element or the severity of each finding should
+    use `lint_rules.run_rules(tree)` directly -- every check now lives there as
+    a named, individually testable rule.
+    """
+    findings = lint_rules.run_rules(tree)
+    return ([f.message for f in lint_rules.errors(findings)],
+            [f.message for f in lint_rules.warnings(findings)])
 
 
-def validate(path):
+def validate(path, strict=False, as_json=False):
+    """
+    Validate a .bpmn file. Returns True when it is deliverable.
+
+    `strict` promotes modelling warnings to failures (the gate used in CI and in
+    the test suite); style-level `info` findings never fail anything. `as_json`
+    prints one machine-readable object instead of the human report, which is how
+    the assistant reads the findings and repairs what is mechanical.
+    """
+    if as_json:
+        return _validate_json(path, strict)
+
     tree = _parse_or_die(path)
-    problems, warnings = stage2_lint(tree)
+    findings = lint_rules.run_rules(tree)
+    problems = [f.message for f in lint_rules.errors(findings)]
+    warnings = [f.message for f in lint_rules.warnings(findings)]
+    infos = [f.message for f in lint_rules.infos(findings)]
+
     if problems:
         print(f"[FAIL] Stage 2 (control-flow lint): {len(problems)} problem(s)", file=sys.stderr)
         for p in problems:
@@ -673,17 +762,197 @@ def validate(path):
         for w in warnings:
             print(f"  [warn] {w}", file=sys.stderr)
         return False
+
     for w in warnings:
         print(f"[WARN] {w}")
+    for i in infos:
+        print(f"[INFO] {i}")
+    if strict and warnings:
+        print(f"[FAIL] --strict: {len(warnings)} warning(s) treated as failures", file=sys.stderr)
+        return False
     print("[OK] All checks passed.")
     return True
+
+
+def _validate_json(path, strict):
+    """The --json report. Always prints one JSON object, even for broken XML."""
+    try:
+        tree = ET.parse(path)
+    except (ET.ParseError, OSError) as e:
+        payload = {
+            "file": str(path),
+            "ok": False,
+            "strict": strict,
+            "counts": {"error": 1, "warn": 0, "info": 0},
+            "findings": [{
+                "rule": "malformed-xml",
+                "severity": "error",
+                "element": None,
+                "message": f"stage 1 (well-formedness): {e}",
+                "fixable": False,
+            }],
+        }
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return False
+
+    findings = lint_rules.run_rules(tree)
+    counts = {
+        "error": len(lint_rules.errors(findings)),
+        "warn": len(lint_rules.warnings(findings)),
+        "info": len(lint_rules.infos(findings)),
+    }
+    ok = counts["error"] == 0 and not (strict and counts["warn"])
+    payload = {
+        "file": str(path),
+        "ok": ok,
+        "strict": strict,
+        "counts": counts,
+        "findings": [f.to_dict() for f in findings],
+    }
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    return ok
+
+
+# ---------------------------------------------------------------------------
+# fix (mechanical repairs only)
+# ---------------------------------------------------------------------------
+
+class FixReport:
+    """What `run_fix` changed, and what it deliberately left alone."""
+
+    def __init__(self, output, changes, remaining_problems):
+        self.output = output
+        self.changes = changes
+        self.remaining_problems = remaining_problems
+
+
+def _rebuild_flow_refs(process_el):
+    """Make every <bpmn:incoming>/<bpmn:outgoing> agree with the sequenceFlows."""
+    changes = []
+    nodes, _edges, _issues = build_graph(process_el)
+    for child in process_el:
+        nid = child.get("id")
+        if nid not in nodes:
+            continue
+        declared_in = [c for c in child if _tag(c) == "incoming"]
+        declared_out = [c for c in child if _tag(c) == "outgoing"]
+        real_in = [flow_id for flow_id, _src in nodes[nid]["in_edges"]]
+        real_out = [flow_id for flow_id, _tgt in nodes[nid]["out_edges"]]
+        if (sorted(c.text.strip() for c in declared_in if c.text) == sorted(real_in)
+                and sorted(c.text.strip() for c in declared_out if c.text) == sorted(real_out)):
+            continue
+
+        for element in declared_in + declared_out:
+            child.remove(element)
+        # Re-insert ahead of any event definition, which must stay last.
+        insert_at = 0
+        for flow_id in real_in:
+            element = ET.Element(f"{{{BPMN_NS}}}incoming")
+            element.text = flow_id
+            child.insert(insert_at, element)
+            insert_at += 1
+        for flow_id in real_out:
+            element = ET.Element(f"{{{BPMN_NS}}}outgoing")
+            element.text = flow_id
+            child.insert(insert_at, element)
+            insert_at += 1
+        changes.append(f"flow-refs-mismatch: rebuilt incoming/outgoing of '{nid}' from the sequenceFlows")
+    return changes
+
+
+def _drop_duplicate_flows(process_el):
+    """Remove a second sequenceFlow that repeats an existing source -> target pair."""
+    changes = []
+    seen = {}
+    for flow in list(process_el.findall("bpmn:sequenceFlow", NS)):
+        src, tgt = flow.get("sourceRef"), flow.get("targetRef")
+        if not src or not tgt or src == tgt:
+            continue
+        if (src, tgt) in seen:
+            process_el.remove(flow)
+            changes.append(
+                f"duplicate-flow: removed '{flow.get('id')}' ({src} -> {tgt}), already connected "
+                f"by '{seen[(src, tgt)]}'")
+        else:
+            seen[(src, tgt)] = flow.get("id")
+    return changes
+
+
+def _rename_duplicate_ids(root):
+    """
+    Give every element its own id, so bpmn-js can import the file at all.
+
+    Only the SECOND and later occurrences are renamed, and references are left
+    pointing at the first -- which is what any parser already assumed. The rename
+    is reported so a human can confirm that was the intent.
+    """
+    changes = []
+    taken = {el.get("id") for el in root.iter() if el.get("id")}
+    seen = set()
+    for element in root.iter():
+        eid = element.get("id")
+        if not eid:
+            continue
+        if eid not in seen:
+            seen.add(eid)
+            continue
+        n = 2
+        while f"{eid}_{n}" in taken:
+            n += 1
+        new_id = f"{eid}_{n}"
+        element.set("id", new_id)
+        taken.add(new_id)
+        seen.add(new_id)
+        changes.append(
+            f"duplicate-id: renamed the second <{_tag(element)}> carrying id '{eid}' to '{new_id}' "
+            f"-- references still point at the first one; confirm that is what you meant")
+    return changes
+
+
+def run_fix(input_path, output_path=None, dry_run=False):
+    """
+    Repair what is bookkeeping and leave process decisions to a human.
+
+    Fixes: incoming/outgoing that disagree with the flows, exactly duplicated
+    connections, duplicate ids, and missing or degenerate DI. Never adds a node,
+    a flow, a condition or a name -- those say what the process IS, and guessing
+    them produces a diagram that lints clean and describes the wrong business.
+    """
+    tree = _parse_or_die(input_path)
+    root = tree.getroot()
+
+    changes = _rename_duplicate_ids(root)
+    for process_el in _process_elements(root):
+        changes.extend(_drop_duplicate_flows(process_el))
+        changes.extend(_rebuild_flow_refs(process_el))
+
+    # Recompute the DI whenever it is missing or no longer describes the graph.
+    di_findings = [f for f in lint_rules.run_rules(tree)
+                   if f.rule in ("missing-diagram", "missing-plane", "missing-shape",
+                                  "missing-edge", "edge-waypoints")]
+    if di_findings:
+        for diagram in root.findall(f"{{{BPMNDI_NS}}}BPMNDiagram"):
+            root.remove(diagram)
+        for process_el in _process_elements(root):
+            root.append(compute_diagram(process_el))
+        changes.append(f"layout: recomputed the BPMNDiagram ({len(di_findings)} DI finding(s) "
+                        f"including {di_findings[0].rule})")
+
+    out_path = Path(output_path) if output_path else Path(input_path)
+    if not dry_run and (changes or out_path != Path(input_path)):
+        ET.indent(tree, space="  ")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        tree.write(out_path, encoding="UTF-8", xml_declaration=True)
+
+    remaining, _warnings = stage2_lint(tree)
+    return FixReport(out_path, changes, remaining)
 
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="bpmn_tool.py",
         description="Layout and validate BPMN 2.0 .bpmn files (pure stdlib, no XSD).",
@@ -698,20 +967,60 @@ def main():
 
     p_validate = sub.add_parser("validate", help="Run well-formedness + control-flow lint on a .bpmn file.")
     p_validate.add_argument("file", help="Path to the .bpmn file to validate.")
+    p_validate.add_argument("--json", dest="as_json", action="store_true",
+                             help="Print the findings as one JSON object (rule, severity, element, fixable).")
+    p_validate.add_argument("--strict", action="store_true",
+                             help="Treat modelling warnings as failures (info-level findings never fail).")
 
     p_copy = sub.add_parser("copy-editor", help="Copy editor.html to a project directory and configure default diagram.")
     p_copy.add_argument("target_dir", help="Target project directory.")
     p_copy.add_argument("bpmn_file", nargs="?", default=None, help="Optional BPMN diagram to configure as default.")
+    p_copy.add_argument("--force", action="store_true",
+                         help="Overwrite the project's editor.html even if it carries local edits.")
 
-    args = parser.parse_args()
+    p_fix = sub.add_parser("fix", help="Repair mechanical problems (flow refs, duplicate flows/ids, DI).")
+    p_fix.add_argument("input", help="Path to the .bpmn file to repair.")
+    p_fix.add_argument("-o", "--output", help="Output path (default: repair the file in place).")
+    p_fix.add_argument("--dry-run", dest="dry_run", action="store_true",
+                        help="Report what would change without writing anything.")
+
+    p_extract = sub.add_parser("extract", help="Read a .bpmn back into the JSON process spec (inverse of bpmn_build.py).")
+    p_extract.add_argument("input", help="Path to the .bpmn file to extract.")
+    p_extract.add_argument("-o", "--output",
+                            help="Output path (default: <input>-spec.json next to the diagram).")
+
+    args = parser.parse_args(argv)
 
     if args.command == "layout":
         run_layout(args.input, args.output, copy_editor=args.copy_editor)
     elif args.command == "validate":
-        sys.exit(0 if validate(args.file) else 1)
+        sys.exit(0 if validate(args.file, strict=args.strict, as_json=args.as_json) else 1)
     elif args.command == "copy-editor":
-        copied = copy_editor_if_needed(args.target_dir, bpmn_path=args.bpmn_file)
+        copied = copy_editor_if_needed(args.target_dir, bpmn_path=args.bpmn_file, force=args.force)
         sys.exit(0 if copied else 1)
+    elif args.command == "fix":
+        report = run_fix(args.input, args.output, dry_run=args.dry_run)
+        prefix = "[DRY-RUN] would apply" if args.dry_run else "[OK] applied"
+        if report.changes:
+            print(f"{prefix} {len(report.changes)} repair(s) to {report.output}")
+            for change in report.changes:
+                print(f"  - {change}")
+        else:
+            print(f"[OK] nothing to repair in {report.output}")
+        if report.remaining_problems:
+            print(f"[FAIL] {len(report.remaining_problems)} problem(s) need a human decision:",
+                  file=sys.stderr)
+            for problem in report.remaining_problems:
+                print(f"  - {problem}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
+    elif args.command == "extract":
+        try:
+            run_extract(args.input, args.output)
+        except ExtractError as e:
+            print(f"[FAIL] cannot extract a spec: {e}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
 
 
 if __name__ == "__main__":

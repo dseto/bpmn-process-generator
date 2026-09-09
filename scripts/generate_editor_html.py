@@ -20,6 +20,12 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
+# Version of the editor handed to a project. Bump it whenever this generator
+# changes: `bpmn_tool.copy_editor_if_needed` compares it against the copy already
+# in the project and refreshes an older, untouched one (an edited copy is kept
+# and reported instead -- see `was_edited_locally`).
+EDITOR_VERSION = "1.1.0"
+
 PRESET_FILES = {
     "06-bus-boarding-process.bpmn": ROOT_DIR / "tests" / "06-bus-boarding-process.bpmn",
     "04-incident-management.bpmn": ROOT_DIR / "tests" / "04-incident-management.bpmn",
@@ -64,6 +70,8 @@ html_content = f"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="bpmn-editor-version" content="{EDITOR_VERSION}" />
+<meta name="bpmn-editor-hash" content="" />
 <title>BPMN Editor Central</title>
 <!-- bpmn-js v17.0.0 (Modeler) -->
 <link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.0/dist/assets/diagram-js.css" />
@@ -304,12 +312,156 @@ html_content = f"""<!DOCTYPE html>
     background: #f59e0b;
   }}
 
+  #workspace {{
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+    width: 100%;
+  }}
+
   #canvas {{
     flex: 1 1 auto;
-    width: 100%;
+    min-width: 0;
     min-height: 0;
     background: #ffffff;
     position: relative;
+  }}
+
+  #properties-panel {{
+    flex: 0 0 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 16px;
+    overflow-y: auto;
+    background: #f8fafc;
+    border-left: 1px solid #e2e8f0;
+    font-size: 13px;
+    color: #0f172a;
+  }}
+  #properties-panel.hidden {{
+    display: none;
+  }}
+  #properties-panel h2 {{
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+  }}
+  .prop-field {{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }}
+  .prop-field label {{
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+  }}
+  .prop-field input[type="text"],
+  .prop-field select,
+  .prop-field textarea {{
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    background: #ffffff;
+    color: #0f172a;
+  }}
+  .prop-field input[readonly] {{
+    background: #e2e8f0;
+    color: #475569;
+  }}
+  .prop-field textarea {{
+    resize: vertical;
+    min-height: 64px;
+  }}
+  .prop-checkbox {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #334155;
+  }}
+  #prop-empty {{
+    color: #64748b;
+    line-height: 1.5;
+  }}
+  #prop-flow-fields.hidden,
+  #prop-shape-fields.hidden,
+  #prop-body.hidden {{
+    display: none;
+  }}
+
+  #validation-section {{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 12px;
+  }}
+  #validation-results {{
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }}
+  .validation-finding {{
+    text-align: left;
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-left-width: 4px;
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: pointer;
+    color: #0f172a;
+  }}
+  .validation-finding:hover {{
+    background: #f1f5f9;
+  }}
+  .validation-finding.error {{
+    border-left-color: #dc2626;
+  }}
+  .validation-finding.warn {{
+    border-left-color: #f59e0b;
+  }}
+  .validation-finding .rule {{
+    display: block;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+  }}
+  .validation-ok {{
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: #dcfce7;
+    color: #166534;
+    font-size: 12px;
+  }}
+
+  @media print {{
+    @page {{
+      size: landscape;
+      margin: 10mm;
+    }}
+    #app-header,
+    #properties-panel,
+    #toast,
+    #drop-overlay {{
+      display: none !important;
+    }}
+    #workspace, #canvas {{
+      width: 100%;
+      height: auto;
+    }}
   }}
 
   #error-banner {{
@@ -463,8 +615,26 @@ html_content = f"""<!DOCTYPE html>
 
   <div class="toolbar-sep"></div>
 
+  <!-- Grupo Alinhamento -->
+  <div class="button-group">
+    <button id="btn-align-left" title="Alinhar os elementos selecionados pela esquerda">
+      ⬅️ Alinhar
+    </button>
+    <button id="btn-align-middle" title="Alinhar os elementos selecionados pelo centro horizontal">
+      ↕️ Centralizar
+    </button>
+    <button id="btn-distribute-h" title="Distribuir os elementos selecionados com espaçamento igual">
+      ↔️ Distribuir
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
   <!-- Grupo Visualização & Zoom -->
   <div class="button-group">
+    <button id="btn-props-toggle" title="Mostrar/ocultar o painel de propriedades">
+      🧾 Propriedades
+    </button>
     <button id="btn-search" title="Localizar elementos no diagrama (Ctrl+F)">
       🔍
     </button>
@@ -491,6 +661,9 @@ html_content = f"""<!DOCTYPE html>
     </button>
     <button id="btn-export-png" title="Exportar imagem em alta resolução (.png)">
       📷 PNG
+    </button>
+    <button id="btn-export-pdf" title="Imprimir o diagrama (escolha &quot;Salvar como PDF&quot;)">
+      🖨️ PDF
     </button>
   </div>
 
@@ -522,7 +695,64 @@ html_content = f"""<!DOCTYPE html>
 <input type="file" id="file-input" accept=".bpmn,.xml" style="display:none" />
 
 <div id="error-banner"></div>
-<div id="canvas"></div>
+
+<div id="workspace">
+  <div id="canvas"></div>
+  <aside id="properties-panel">
+    <h2>Propriedades</h2>
+    <div id="prop-empty">Selecione um elemento no diagrama para editar nome, documentação, tipo e — em conexões — a condição da decisão.</div>
+    <div id="prop-body" class="hidden">
+      <div class="prop-field">
+        <label for="prop-id">Identificador</label>
+        <input type="text" id="prop-id" readonly />
+      </div>
+      <div class="prop-field">
+        <label for="prop-name">Nome</label>
+        <input type="text" id="prop-name" placeholder="Verbo no infinitivo + objeto" />
+      </div>
+      <div class="prop-field">
+        <label for="prop-documentation">Documentação</label>
+        <textarea id="prop-documentation" placeholder="Detalhes, regras e observações desta etapa"></textarea>
+      </div>
+      <div id="prop-shape-fields">
+        <div class="prop-field">
+          <label for="prop-type">Tipo do elemento</label>
+          <select id="prop-type">
+            <option value="">(manter o tipo atual)</option>
+            <option value="bpmn:Task">Tarefa genérica</option>
+            <option value="bpmn:UserTask">Tarefa de pessoa (User Task)</option>
+            <option value="bpmn:ServiceTask">Tarefa de sistema (Service Task)</option>
+            <option value="bpmn:SendTask">Envio de mensagem (Send Task)</option>
+            <option value="bpmn:ReceiveTask">Recebimento de mensagem (Receive Task)</option>
+            <option value="bpmn:ManualTask">Tarefa manual</option>
+            <option value="bpmn:BusinessRuleTask">Regra de negócio</option>
+            <option value="bpmn:ExclusiveGateway">Decisão exclusiva (XOR)</option>
+            <option value="bpmn:ParallelGateway">Paralelo (AND)</option>
+            <option value="bpmn:InclusiveGateway">Inclusivo (OR)</option>
+          </select>
+        </div>
+      </div>
+      <div id="prop-flow-fields" class="hidden">
+        <div class="prop-field">
+          <label for="prop-condition">Condição da decisão</label>
+          <input type="text" id="prop-condition" placeholder="ex.: valor &lt;= orcamento" />
+        </div>
+        <label class="prop-checkbox">
+          <input type="checkbox" id="prop-default" />
+          Fluxo padrão (quando nenhuma condição for atendida)
+        </label>
+      </div>
+    </div>
+
+    <div id="validation-section">
+      <h2>Validação</h2>
+      <button id="btn-validate" class="btn-action" title="Checar o diagrama contra as regras da skill">
+        ✅ Validar diagrama
+      </button>
+      <div id="validation-results"></div>
+    </div>
+  </aside>
+</div>
 
 <div id="drop-overlay">
   <svg style="width:48px;height:48px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
@@ -552,6 +782,24 @@ html_content = f"""<!DOCTYPE html>
   const dropOverlay = document.getElementById('drop-overlay');
   const btnUndo = document.getElementById('btn-undo');
   const btnRedo = document.getElementById('btn-redo');
+  const propertiesPanel = document.getElementById('properties-panel');
+  const btnPropsToggle = document.getElementById('btn-props-toggle');
+  const propEmpty = document.getElementById('prop-empty');
+  const propBody = document.getElementById('prop-body');
+  const propId = document.getElementById('prop-id');
+  const propName = document.getElementById('prop-name');
+  const propDocumentation = document.getElementById('prop-documentation');
+  const propShapeFields = document.getElementById('prop-shape-fields');
+  const propType = document.getElementById('prop-type');
+  const propFlowFields = document.getElementById('prop-flow-fields');
+  const propCondition = document.getElementById('prop-condition');
+  const propDefault = document.getElementById('prop-default');
+  const btnValidate = document.getElementById('btn-validate');
+  const validationResults = document.getElementById('validation-results');
+  const btnAlignLeft = document.getElementById('btn-align-left');
+  const btnAlignMiddle = document.getElementById('btn-align-middle');
+  const btnDistributeH = document.getElementById('btn-distribute-h');
+  const btnExportPdf = document.getElementById('btn-export-pdf');
   const fontSizeSelect = document.getElementById('font-size-select');
   const btnFontBold = document.getElementById('btn-font-bold');
   const btnFontItalic = document.getElementById('btn-font-italic');
@@ -647,6 +895,7 @@ html_content = f"""<!DOCTYPE html>
     // Atualiza controles de fonte na toolbar quando a seleção de elementos muda
     modeler.on('selection.changed', (e) => {{
       updateFontToolbarFromSelection(e.newSelection || []);
+      updatePropertiesPanel(e.newSelection || []);
     }});
 
     // Assegura roteamento ortogonal em 90° para novas conexões criadas no canvas
@@ -678,11 +927,341 @@ html_content = f"""<!DOCTYPE html>
       }} catch (e) {{}}
     }}
 
+    // ---------------------------------------------------------------------
+    // Painel de propriedades: nome, documentação, tipo e, em conexões, a
+    // condição da decisão. Tudo passa pelo `modeling`/`bpmnReplace` do
+    // bpmn-js, e não pelo XML, para que undo/redo e o estado "não salvo"
+    // continuem funcionando como em qualquer outra edição do canvas.
+    // ---------------------------------------------------------------------
+    function isFlowConnection(element) {{
+      return !!element && element.type === 'bpmn:SequenceFlow';
+    }}
+
+    function currentPropertyElement() {{
+      const selection = modeler.get('selection').get();
+      return selection.length === 1 ? selection[0] : null;
+    }}
+
+    function documentationOf(element) {{
+      const docs = element.businessObject.documentation || [];
+      return docs.length ? (docs[0].text || '') : '';
+    }}
+
+    function conditionOf(element) {{
+      const expression = element.businessObject.conditionExpression;
+      return expression ? (expression.body || '') : '';
+    }}
+
+    function updatePropertiesPanel(selection) {{
+      const element = (selection && selection.length === 1) ? selection[0] : null;
+      const isRealElement = !!element && element.type !== 'bpmn:Process' && !element.labelTarget;
+
+      propEmpty.style.display = isRealElement ? 'none' : 'block';
+      propBody.classList.toggle('hidden', !isRealElement);
+      if (!isRealElement) return;
+
+      const businessObject = element.businessObject;
+      propId.value = businessObject.id || '';
+      propName.value = businessObject.name || '';
+      propDocumentation.value = documentationOf(element);
+
+      const flow = isFlowConnection(element);
+      propFlowFields.classList.toggle('hidden', !flow);
+      propShapeFields.classList.toggle('hidden', flow);
+
+      if (flow) {{
+        propCondition.value = conditionOf(element);
+        const source = element.source && element.source.businessObject;
+        propDefault.checked = !!(source && source.default && source.default.id === businessObject.id);
+        propDefault.disabled = !source || !/Gateway/.test(source.$type || '');
+      }} else {{
+        propType.value = '';
+      }}
+    }}
+
+    function applyPropertyName() {{
+      const element = currentPropertyElement();
+      if (!element) return;
+      try {{
+        modeler.get('modeling').updateLabel(element, propName.value);
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    function applyPropertyDocumentation() {{
+      const element = currentPropertyElement();
+      if (!element) return;
+      try {{
+        const moddle = modeler.get('moddle');
+        const text = propDocumentation.value.trim();
+        const documentation = text
+          ? [moddle.create('bpmn:Documentation', {{ text: text }})]
+          : [];
+        modeler.get('modeling').updateProperties(element, {{ documentation: documentation }});
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    function applyPropertyType() {{
+      const element = currentPropertyElement();
+      const target = propType.value;
+      if (!element || !target || element.type === target) return;
+      try {{
+        const replaced = modeler.get('bpmnReplace').replaceElement(element, {{ type: target }});
+        modeler.get('selection').select(replaced);
+        showToast('Tipo alterado para ' + target.replace('bpmn:', ''));
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    function applyPropertyCondition() {{
+      const element = currentPropertyElement();
+      if (!element || !isFlowConnection(element)) return;
+      try {{
+        const moddle = modeler.get('moddle');
+        const body = propCondition.value.trim();
+        const conditionExpression = body
+          ? moddle.create('bpmn:FormalExpression', {{ body: body }})
+          : undefined;
+        modeler.get('modeling').updateProperties(element, {{ conditionExpression: conditionExpression }});
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    function applyPropertyDefaultFlow() {{
+      const element = currentPropertyElement();
+      if (!element || !isFlowConnection(element) || !element.source) return;
+      try {{
+        modeler.get('modeling').updateProperties(element.source, {{
+          default: propDefault.checked ? element.businessObject : undefined
+        }});
+        if (propDefault.checked && propCondition.value.trim()) {{
+          // O ramo default é justamente o "nenhuma condição bateu".
+          propCondition.value = '';
+          applyPropertyCondition();
+        }}
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    // ---------------------------------------------------------------------
+    // Validação dentro do editor: um subconjunto das regras de
+    // scripts/lint_rules.py, com os MESMOS ids de regra, para que o que o
+    // editor mostra e o que `bpmn_tool validate` reporta sejam o mesmo
+    // vocabulário. A autoridade continua sendo o linter em Python; aqui é
+    // realimentação imediata enquanto se desenha.
+    // ---------------------------------------------------------------------
+    const GATEWAY_TYPES = [
+      'bpmn:ExclusiveGateway', 'bpmn:ParallelGateway', 'bpmn:InclusiveGateway',
+      'bpmn:EventBasedGateway', 'bpmn:ComplexGateway'
+    ];
+
+    function flowNodes() {{
+      return modeler.get('elementRegistry').filter(el =>
+        el.businessObject
+        && el.businessObject.$instanceOf
+        && el.businessObject.$instanceOf('bpmn:FlowNode')
+        && !el.labelTarget
+      );
+    }}
+
+    function outgoingOf(element) {{
+      return (element.businessObject.outgoing || []);
+    }}
+
+    function incomingOf(element) {{
+      return (element.businessObject.incoming || []);
+    }}
+
+    function reachesAnEnd(nodes) {{
+      const byId = {{}};
+      nodes.forEach(node => {{ byId[node.id] = node; }});
+      const reaching = new Set();
+      const stack = nodes.filter(n => n.type === 'bpmn:EndEvent').map(n => n.id);
+      while (stack.length) {{
+        const id = stack.pop();
+        if (reaching.has(id)) continue;
+        reaching.add(id);
+        const node = byId[id];
+        if (!node) continue;
+        incomingOf(node).forEach(flow => {{
+          if (flow.sourceRef) stack.push(flow.sourceRef.id);
+        }});
+        if (node.type === 'bpmn:BoundaryEvent' && node.businessObject.attachedToRef) {{
+          stack.push(node.businessObject.attachedToRef.id);
+        }}
+      }}
+      return reaching;
+    }}
+
+    function laneMembership() {{
+      const covered = new Set();
+      let hasLanes = false;
+      modeler.get('elementRegistry').forEach(el => {{
+        if (el.type !== 'bpmn:Lane') return;
+        hasLanes = true;
+        (el.businessObject.flowNodeRef || []).forEach(ref => covered.add(ref.id));
+      }});
+      return {{ hasLanes: hasLanes, covered: covered }};
+    }}
+
+    function collectValidationFindings() {{
+      const findings = [];
+      const nodes = flowNodes();
+      if (!nodes.length) return findings;
+
+      const reaching = reachesAnEnd(nodes);
+      const hasEndEvent = nodes.some(n => n.type === 'bpmn:EndEvent');
+      const lanes = laneMembership();
+
+      nodes.forEach(node => {{
+        const name = (node.businessObject.name || '').trim();
+        const outgoing = outgoingOf(node);
+        const incoming = incomingOf(node);
+
+        if (node.type !== 'bpmn:EndEvent' && outgoing.length === 0) {{
+          findings.push({{ rule: 'dead-end', severity: 'error', id: node.id,
+            message: (name || node.id) + ' não tem fluxo de saída' }});
+        }}
+        if (node.type !== 'bpmn:StartEvent' && node.type !== 'bpmn:BoundaryEvent' && incoming.length === 0) {{
+          findings.push({{ rule: 'unreachable-node', severity: 'error', id: node.id,
+            message: (name || node.id) + ' não recebe nenhum fluxo' }});
+        }}
+        if (hasEndEvent && outgoing.length > 0 && !reaching.has(node.id)) {{
+          findings.push({{ rule: 'no-path-to-end', severity: 'error', id: node.id,
+            message: (name || node.id) + ' nunca alcança um evento de fim' }});
+        }}
+        if ((node.type === 'bpmn:ExclusiveGateway' || node.type === 'bpmn:InclusiveGateway')
+            && outgoing.length > 1) {{
+          const defaultFlow = node.businessObject.default;
+          const missing = outgoing.filter(flow =>
+            (!defaultFlow || flow.id !== defaultFlow.id)
+            && !(flow.conditionExpression && (flow.conditionExpression.body || '').trim())
+          );
+          if (missing.length) {{
+            findings.push({{ rule: 'gateway-without-condition', severity: 'warn', id: node.id,
+              message: (name || node.id) + ' divide sem condição escrita em ' + missing.length + ' saída(s)' }});
+          }}
+        }}
+        if (!name && (GATEWAY_TYPES.indexOf(node.type) >= 0
+            || /Task$/.test(node.type) || node.type === 'bpmn:StartEvent' || node.type === 'bpmn:EndEvent')) {{
+          findings.push({{ rule: 'unnamed-element', severity: 'warn', id: node.id,
+            message: node.id + ' está sem nome e renderiza como caixa vazia' }});
+        }}
+        if (lanes.hasLanes && !lanes.covered.has(node.id)) {{
+          findings.push({{ rule: 'lane-coverage-missing', severity: 'warn', id: node.id,
+            message: (name || node.id) + ' não está em nenhuma raia' }});
+        }}
+      }});
+
+      return findings;
+    }}
+
+    function selectValidationFinding(elementId) {{
+      try {{
+        const element = modeler.get('elementRegistry').get(elementId);
+        if (!element) return;
+        modeler.get('selection').select(element);
+        modeler.get('canvas').scrollToElement(element);
+      }} catch (e) {{}}
+    }}
+
+    function runDiagramValidation() {{
+      validationResults.innerHTML = '';
+      let findings = [];
+      try {{
+        findings = collectValidationFindings();
+      }} catch (e) {{
+        showError(e);
+        return;
+      }}
+
+      if (!findings.length) {{
+        const ok = document.createElement('div');
+        ok.className = 'validation-ok';
+        ok.textContent = '✅ Nenhum problema encontrado nas regras verificadas aqui.';
+        validationResults.appendChild(ok);
+        return;
+      }}
+
+      findings.forEach(finding => {{
+        const item = document.createElement('button');
+        item.className = 'validation-finding ' + finding.severity;
+        item.title = 'Clique para selecionar o elemento no diagrama';
+        const rule = document.createElement('span');
+        rule.className = 'rule';
+        rule.textContent = finding.severity + ' · ' + finding.rule;
+        item.appendChild(rule);
+        item.appendChild(document.createTextNode(finding.message));
+        item.addEventListener('click', () => selectValidationFinding(finding.id));
+        validationResults.appendChild(item);
+      }});
+      showToast(findings.length + ' achado(s) de validação');
+    }}
+
+    btnValidate.addEventListener('click', runDiagramValidation);
+
+    // ---------------------------------------------------------------------
+    // Alinhar / distribuir (módulos nativos do bpmn-js) e impressão em PDF
+    // ---------------------------------------------------------------------
+    function alignSelection(direction) {{
+      const selected = getSelectedElements().filter(el => !el.waypoints);
+      if (selected.length < 2) {{
+        showToast('Selecione pelo menos 2 elementos para alinhar');
+        return;
+      }}
+      try {{
+        modeler.get('alignElements').trigger(selected, direction);
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    function distributeSelection(axis) {{
+      const selected = getSelectedElements().filter(el => !el.waypoints);
+      if (selected.length < 3) {{
+        showToast('Selecione pelo menos 2 elementos para distribuir (o ideal são 3+)');
+        return;
+      }}
+      try {{
+        modeler.get('distributeElements').trigger(selected, axis);
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    function exportPDF() {{
+      // A folha de estilo @media print esconde a interface e imprime só o
+      // canvas; o "Salvar como PDF" do próprio navegador gera o arquivo.
+      showToast('Escolha "Salvar como PDF" na janela de impressão');
+      window.print();
+    }}
+
+    btnAlignLeft.addEventListener('click', () => alignSelection('left'));
+    btnAlignMiddle.addEventListener('click', () => alignSelection('middle'));
+    btnDistributeH.addEventListener('click', () => distributeSelection('horizontal'));
+    btnExportPdf.addEventListener('click', exportPDF);
+
+    propName.addEventListener('change', applyPropertyName);
+    propDocumentation.addEventListener('change', applyPropertyDocumentation);
+    propType.addEventListener('change', applyPropertyType);
+    propCondition.addEventListener('change', applyPropertyCondition);
+    propDefault.addEventListener('change', applyPropertyDefaultFlow);
+    btnPropsToggle.addEventListener('click', () => {{
+      propertiesPanel.classList.toggle('hidden');
+    }});
+
     async function loadXML(xml, name = "diagrama.bpmn", handle = null) {{
       try {{
         clearError();
         elementFontStyles = {{}};
         updateFontToolbarFromSelection([]);
+        updatePropertiesPanel([]);
         await modeler.importXML(xml);
         enforceOrthogonalConnections();
         applyAllElementFontStyles();

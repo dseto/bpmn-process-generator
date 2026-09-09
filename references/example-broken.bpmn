@@ -1,4 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Deliberately broken reference file: every error below exists to make one lint
+  rule fire, so `bpmn_tool.py validate references/example-broken.bpmn` shows what
+  a rejected diagram looks like. Do NOT "fix" it.
+
+    dangling-flow-ref        Flow_1 targets Task_DoesNotExist
+    unreachable-node         Task_ReviewExpense never receives a real flow
+    flow-refs-mismatch       Task_ReviewExpense declares <incoming>Flow_1</incoming> anyway
+    start-has-incoming       Flow_Restart loops back into the start event
+    end-has-outgoing         Flow_AfterEnd leaves an end event
+    default-flow-invalid     Gateway_Approved names a default flow that is not its own
+    boundary-invalid         Boundary_NoHost has no attachedToRef
+    lane-coverage-duplicate  Task_ProcessPayment is listed in both lanes
+-->
 <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
                   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
                   xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
@@ -7,6 +21,16 @@
                   id="Definitions_1"
                   targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="Process_ExpenseApproval" name="Expense approval" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_1">
+      <bpmn:lane id="Lane_Employee" name="Employee">
+        <bpmn:flowNodeRef>Start_ExpenseSubmitted</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ProcessPayment</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Finance" name="Finance">
+        <bpmn:flowNodeRef>Task_ProcessPayment</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NotifyRejection</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
     <bpmn:startEvent id="Start_ExpenseSubmitted" name="Expense submitted">
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
     </bpmn:startEvent>
@@ -14,7 +38,7 @@
       <bpmn:incoming>Flow_1</bpmn:incoming>
       <bpmn:outgoing>Flow_2</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved?">
+    <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved?" default="Flow_2">
       <bpmn:incoming>Flow_2</bpmn:incoming>
       <bpmn:outgoing>Flow_Yes</bpmn:outgoing>
       <bpmn:outgoing>Flow_No</bpmn:outgoing>
@@ -27,8 +51,13 @@
       <bpmn:incoming>Flow_No</bpmn:incoming>
       <bpmn:outgoing>Flow_4</bpmn:outgoing>
     </bpmn:userTask>
+    <bpmn:boundaryEvent id="Boundary_NoHost" name="Deadline">
+      <bpmn:outgoing>Flow_Restart</bpmn:outgoing>
+      <bpmn:timerEventDefinition />
+    </bpmn:boundaryEvent>
     <bpmn:endEvent id="End_PaymentProcessed" name="Payment processed">
       <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_AfterEnd</bpmn:outgoing>
     </bpmn:endEvent>
     <bpmn:endEvent id="End_ExpenseRejected" name="Expense rejected">
       <bpmn:incoming>Flow_4</bpmn:incoming>
@@ -43,6 +72,8 @@
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_ProcessPayment" targetRef="End_PaymentProcessed" />
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_NotifyRejection" targetRef="End_ExpenseRejected" />
+    <bpmn:sequenceFlow id="Flow_Restart" sourceRef="Boundary_NoHost" targetRef="Start_ExpenseSubmitted" />
+    <bpmn:sequenceFlow id="Flow_AfterEnd" sourceRef="End_PaymentProcessed" targetRef="Task_ReviewExpense" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_ExpenseApproval">
@@ -60,6 +91,9 @@
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_NotifyRejection_di" bpmnElement="Task_NotifyRejection">
         <omgdc:Bounds x="500" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Boundary_NoHost_di" bpmnElement="Boundary_NoHost">
+        <omgdc:Bounds x="322" y="242" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="End_PaymentProcessed_di" bpmnElement="End_PaymentProcessed">
         <omgdc:Bounds x="660" y="102" width="36" height="36" />
@@ -91,6 +125,17 @@
       <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
         <omgdi:waypoint x="600" y="240" />
         <omgdi:waypoint x="660" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Restart_di" bpmnElement="Flow_Restart">
+        <omgdi:waypoint x="340" y="278" />
+        <omgdi:waypoint x="170" y="278" />
+        <omgdi:waypoint x="170" y="138" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_AfterEnd_di" bpmnElement="Flow_AfterEnd">
+        <omgdi:waypoint x="678" y="102" />
+        <omgdi:waypoint x="678" y="40" />
+        <omgdi:waypoint x="290" y="40" />
+        <omgdi:waypoint x="290" y="80" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

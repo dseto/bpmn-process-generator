@@ -1,0 +1,8 @@
+{
+  "feature_id": "T-14",
+  "contract": "bpmn-skill-upgrade",
+  "needs": "mesma acao de T-12: liberar 'python scripts/generate_editor_html.py' no .harness/harness.yaml ou rodar o comando no terminal do usuario para regerar editor.html (as metas de versao/hash so existem no gerador)",
+  "recorded_at": "2026-09-09T11:09:05.345562+00:00",
+  "watch": "editor.html",
+  "watch_hash": "sha256:e06809a87f568b23645e07af9d338326ba4e2002efed88675bcf2c10f7139756"
+}

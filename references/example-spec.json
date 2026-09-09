@@ -1,0 +1,33 @@
+{
+  "id": "Process_AtendimentoSuporte",
+  "name": "Atendimento de suporte",
+  "executable": false,
+  "lanes": [
+    { "id": "suporte", "name": "Suporte N1" },
+    { "id": "engenharia", "name": "Engenharia" }
+  ],
+  "nodes": [
+    { "id": "chamado_aberto", "type": "start", "name": "Chamado aberto", "event": "message", "lane": "suporte" },
+    { "id": "triar", "type": "userTask", "name": "Triar chamado", "lane": "suporte" },
+    { "id": "prazo_triagem", "type": "boundary", "name": "Prazo de 4h", "event": "timer", "attachedTo": "triar", "lane": "suporte" },
+    { "id": "resolvivel", "type": "xor", "name": "Resolvível no primeiro nível?", "lane": "suporte" },
+    { "id": "responder", "type": "userTask", "name": "Responder cliente", "lane": "suporte" },
+    { "id": "registrar_solucao", "type": "serviceTask", "name": "Registrar solução na base", "lane": "suporte" },
+    { "id": "encerrado", "type": "end", "name": "Chamado encerrado", "lane": "suporte" },
+    { "id": "escalar", "type": "userTask", "name": "Escalar para engenharia", "lane": "engenharia" },
+    { "id": "investigar", "type": "userTask", "name": "Investigar causa raiz", "lane": "engenharia" },
+    { "id": "em_engenharia", "type": "end", "name": "Chamado em engenharia", "lane": "engenharia" },
+    { "id": "prazo_estourado", "type": "end", "name": "Triagem atrasada", "lane": "suporte" }
+  ],
+  "flows": [
+    { "from": "chamado_aberto", "to": "triar" },
+    { "from": "triar", "to": "resolvivel" },
+    { "from": "resolvivel", "to": "responder", "label": "Sim", "condition": "resolvivelNoPrimeiroNivel == true" },
+    { "from": "resolvivel", "to": "escalar", "label": "Não", "default": true },
+    { "from": "responder", "to": "registrar_solucao" },
+    { "from": "registrar_solucao", "to": "encerrado" },
+    { "from": "escalar", "to": "investigar" },
+    { "from": "investigar", "to": "em_engenharia" },
+    { "from": "prazo_triagem", "to": "prazo_estourado" }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "feature_id": "T-11",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "O manual da skill instrui a perguntar o que falta e a gerar pelo spec, não escrevendo XML à mão",
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "tests/test_docs_contract.py"
+  ],
+  "verify_cmd": "pytest tests/test_docs_contract.py -q",
+  "recorded_at": "2026-09-09T11:02:33.019099+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:327db8f34ab5c1ba3de74d320b60cb069e3caab00ae72110c80700b377f33b51"
+}

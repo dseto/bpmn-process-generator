@@ -43,6 +43,21 @@ def test_bpmn_validation_syntax_and_control_flow(name: str, tests_dir: Path):
 
 
 @pytest.mark.parametrize("name", TEST_CASES)
+def test_bpmn_passes_strict_validation(name: str, tests_dir: Path):
+    """
+    The shipped diagrams are what the skill teaches by example, so they hold to
+    the strict bar: no modelling warnings either (implicit split/merge, a
+    decision without a written criterion, an unnamed shape, overlapping boxes).
+    """
+    import lint_rules
+
+    findings = lint_rules.run_rules(ET.parse(tests_dir / f"{name}.bpmn"))
+    blocking = lint_rules.errors(findings) + lint_rules.warnings(findings)
+    assert not blocking, f"{name}.bpmn does not pass --strict:\n" + "\n".join(
+        f"  - [{f.severity}] {f.rule}: {f.message}" for f in blocking)
+
+
+@pytest.mark.parametrize("name", TEST_CASES)
 def test_bpmn_di_completeness_and_coordinates(name: str, tests_dir: Path):
     """Verify Diagram Interchange (DI) completeness and coordinate validity."""
     bpmn_path = tests_dir / f"{name}.bpmn"

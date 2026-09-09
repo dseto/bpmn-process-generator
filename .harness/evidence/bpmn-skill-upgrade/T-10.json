@@ -1,0 +1,18 @@
+{
+  "feature_id": "T-10",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "Os seis diagramas de exemplo da skill passam no modo mais rigoroso, virando padrão de qualidade",
+  "files": [
+    "tests/test_existing_bpmn.py",
+    "tests/01-user-onboarding.bpmn",
+    "tests/02-credit-card-approval.bpmn",
+    "tests/03-order-fulfillment.bpmn",
+    "tests/04-incident-management.bpmn",
+    "tests/05-document-revision-cycle.bpmn",
+    "tests/06-bus-boarding-process.bpmn"
+  ],
+  "verify_cmd": "pytest tests/test_existing_bpmn.py -q",
+  "recorded_at": "2026-09-09T10:59:03.216029+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:883fbb980ce2fdcb664e1592f6e92647d4ca06b3d47fcd1c5b9575eace233f70"
+}
