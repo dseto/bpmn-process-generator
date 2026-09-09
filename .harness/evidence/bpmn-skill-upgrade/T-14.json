@@ -1,0 +1,15 @@
+{
+  "feature_id": "T-14",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "O editor entregue num projeto se atualiza sozinho quando a skill evolui, sem apagar ajustes locais",
+  "files": [
+    "scripts/bpmn_tool.py",
+    "scripts/generate_editor_html.py",
+    "editor.html",
+    "tests/test_editor_version.py"
+  ],
+  "verify_cmd": "pytest tests/test_editor_version.py -q",
+  "recorded_at": "2026-09-09T11:41:59.121679+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:9ed0ee3c019c4401a76189a9816d21f7d0bbf12250d264b713e256d276747ac7"
+}

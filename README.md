@@ -32,9 +32,14 @@ Projetado como uma **Agent Skill** para assistentes de IA (Claude Code, Antigrav
   * **Busca no Diagrama**: Ferramenta de localização de nós e fluxos integrada (`Ctrl+F`).
   * **Controles de Zoom e Enquadramento**: Zoom in, Zoom out, reset 100% (1:1) e enquadramento automático à janela (*fit-viewport*).
   * **Exportação Gráfica (SVG e PNG 2x)**: Download imediato do diagrama em vetor SVG e em imagem rasterizada de alta resolução PNG com a tipografia intacta.
+  * **Painel de Propriedades**: Edição de nome, documentação, tipo do elemento (conversão entre tarefa de pessoa/sistema e entre gateways) e, em conexões, a condição da decisão e a marcação de fluxo padrão — tudo pelo `modeling` do bpmn-js, com desfazer/refazer.
+  * **Painel de Validação Embutido**: Botão **"✅ Validar diagrama"** que checa um subconjunto das regras do linter (com os mesmos `rule` ids) e lista os achados de forma clicável, selecionando o elemento com defeito no canvas.
+  * **Alinhar, Centralizar e Distribuir**: Ferramentas nativas do bpmn-js para arrumar a seleção; **🖨️ PDF** imprime só o diagrama (folha de estilo de impressão dedicada).
+  * **Atualização Automática da Cópia do Projeto**: O editor entregue carrega versão (`<meta name="bpmn-editor-version">`) e é atualizado quando a skill evolui; se tiver ajustes locais, é preservado e o comando avisa como sobrescrever com `--force`.
+  * **Modo Offline (opcional)**: Colocando os arquivos do bpmn-js em [`assets/vendor/`](assets/vendor/README.md), o gerador embute tudo no `editor.html` e o editor deixa de depender do CDN — útil em máquina sem internet ou rede que bloqueia a unpkg.
   * **Salvamento Direto no Disco**: Utiliza a *File System Access API* no Chrome e Edge para gravar alterações diretamente no arquivo aberto (`Ctrl+S`), sem necessidade de download manual.
   * **Drag & Drop e URL Query**: Arraste qualquer `.bpmn` para o canvas ou abra com `editor.html?file=meu-processo.bpmn`.
-  * **Exemplos Integrados (*Presets*)**: Seletor com diagramas pré-carregados que funcionam 100% offline e sem restrições de CORS via protocolo `file://`.
+  * **Exemplos Integrados (*Presets*)**: Seletor com diagramas pré-carregados, embutidos no próprio HTML — abrem sem `fetch` e sem esbarrar em CORS no protocolo `file://`. (O carregamento da *biblioteca* bpmn-js continua vindo do CDN, salvo no modo offline descrito acima.)
 * **Exportação Portátil Avulsa**: Capacidade de empacotar qualquer `.bpmn` em um único arquivo `.html` autossuficiente para envio a clientes e partes interessadas.
 
 ---

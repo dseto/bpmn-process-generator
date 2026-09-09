@@ -6,6 +6,7 @@
 
     dangling-flow-ref        Flow_1 targets Task_DoesNotExist
     unreachable-node         Task_ReviewExpense never receives a real flow
+                             (keep it that way: nothing may target it)
     flow-refs-mismatch       Task_ReviewExpense declares <incoming>Flow_1</incoming> anyway
     start-has-incoming       Flow_Restart loops back into the start event
     end-has-outgoing         Flow_AfterEnd leaves an end event
@@ -73,7 +74,7 @@
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_ProcessPayment" targetRef="End_PaymentProcessed" />
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_NotifyRejection" targetRef="End_ExpenseRejected" />
     <bpmn:sequenceFlow id="Flow_Restart" sourceRef="Boundary_NoHost" targetRef="Start_ExpenseSubmitted" />
-    <bpmn:sequenceFlow id="Flow_AfterEnd" sourceRef="End_PaymentProcessed" targetRef="Task_ReviewExpense" />
+    <bpmn:sequenceFlow id="Flow_AfterEnd" sourceRef="End_PaymentProcessed" targetRef="Task_ProcessPayment" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_ExpenseApproval">
@@ -134,8 +135,8 @@
       <bpmndi:BPMNEdge id="Flow_AfterEnd_di" bpmnElement="Flow_AfterEnd">
         <omgdi:waypoint x="678" y="102" />
         <omgdi:waypoint x="678" y="40" />
-        <omgdi:waypoint x="290" y="40" />
-        <omgdi:waypoint x="290" y="80" />
+        <omgdi:waypoint x="550" y="40" />
+        <omgdi:waypoint x="550" y="80" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

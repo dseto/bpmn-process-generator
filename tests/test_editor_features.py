@@ -162,7 +162,13 @@ def test_the_editor_can_align_and_distribute_the_selection(editor_html):
 
 
 def test_alignment_needs_at_least_two_elements(editor_html):
-    assert "Selecione pelo menos 2 elementos" in editor_html
+    assert "Selecione pelo menos 2 elementos para alinhar" in editor_html
+
+
+def test_distribution_asks_for_the_number_it_actually_requires(editor_html):
+    """distributeElements moves the MIDDLE elements, so two is not enough."""
+    assert "Selecione pelo menos 3 elementos para distribuir" in editor_html
+    assert re.search(r"selected\.length\s*<\s*3", editor_html)
 
 
 def test_the_editor_can_print_the_diagram_as_pdf(editor_html):

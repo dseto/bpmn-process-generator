@@ -8,7 +8,7 @@
     "references/example-broken.bpmn"
   ],
   "verify_cmd": "pytest tests/test_lint_rules.py -q",
-  "recorded_at": "2026-09-09T10:50:19.444145+00:00",
+  "recorded_at": "2026-09-09T11:40:55.384312+00:00",
   "exit_code": 0,
-  "files_hash": "sha256:8cb10291e9274bf5fde9a35978b8ca791a08ccfd4ea85f8feb9dac0bf4ed0651"
+  "files_hash": "sha256:e576c76442b17609d61bf81fe6d28934869f95d3728ba345addae5e5ccef123d"
 }

@@ -397,11 +397,23 @@ def _version_tuple(version):
         return ()
 
 
+def _hashable_body(html):
+    """
+    The editor's body for integrity purposes: everything except the two meta
+    tags that describe it.
+
+    The version tag is excluded on purpose -- the hash answers "did somebody
+    edit this editor?", the version answers "which generation is it?". Folding
+    the version into the hash would make every refresh look like a local edit.
+    """
+    without_hash = _HASH_RE.sub(lambda m: m.group(1) + m.group(3), html)
+    return _VERSION_RE.sub('<meta name="bpmn-editor-version" content=""', without_hash)
+
+
 def _stamp_hash(html):
     """Fill in the integrity hash of the editor being written to a project."""
-    blanked = _HASH_RE.sub(lambda m: m.group(1) + m.group(3), html)
-    digest = hashlib.sha256(blanked.encode("utf-8")).hexdigest()
-    return _HASH_RE.sub(lambda m: m.group(1) + digest + m.group(3), blanked)
+    digest = hashlib.sha256(_hashable_body(html).encode("utf-8")).hexdigest()
+    return _HASH_RE.sub(lambda m: m.group(1) + digest + m.group(3), html)
 
 
 def was_edited_locally(html):
@@ -413,8 +425,7 @@ def was_edited_locally(html):
     match = _HASH_RE.search(html)
     if not match or not match.group(2):
         return False  # delivered before hashing existed: treat as untouched
-    blanked = _HASH_RE.sub(lambda m: m.group(1) + m.group(3), html)
-    return hashlib.sha256(blanked.encode("utf-8")).hexdigest() != match.group(2)
+    return hashlib.sha256(_hashable_body(html).encode("utf-8")).hexdigest() != match.group(2)
 
 
 def copy_editor_if_needed(target_dir, bpmn_path=None, force=False):
@@ -615,6 +626,21 @@ def extract_spec(source):
     if not processes:
         raise ExtractError("no <bpmn:process> element found")
     process_el = processes[0]
+
+    # Pools and expanded subprocesses are out of scope for the spec format, and
+    # dropping them silently would hand back a spec that rebuilds a SMALLER
+    # process than the one on disk. Say so instead.
+    if len(processes) > 1:
+        print(f"[WARN] the file has {len(processes)} processes (pools); only "
+              f"'{process_el.get('id')}' was extracted -- the others would be lost on a rebuild",
+              file=sys.stderr)
+    nested = [child for child in process_el
+              if _tag(child) in ("subProcess", "transaction", "adHocSubProcess")
+              and any(_tag(inner) in FLOW_NODE_TAGS for inner in child)]
+    if nested:
+        print(f"[WARN] expanded subprocess(es) {', '.join(n.get('id', '?') for n in nested)} keep "
+              f"their inner flow, which the spec format does not carry -- rebuilding from this "
+              f"spec would empty them", file=sys.stderr)
 
     spec = {"id": process_el.get("id") or "Process_1"}
     if process_el.get("name"):
@@ -860,21 +886,53 @@ def _rebuild_flow_refs(process_el):
     return changes
 
 
+def _flow_signature(flow_el):
+    """
+    What makes two flows the same CONNECTION rather than the same pair of nodes.
+
+    Label and condition are part of it on purpose: two branches of a gateway can
+    legitimately reach the same task under different criteria ("Valor alto" and
+    "Cliente novo"), and those are two different statements about the process.
+    Collapsing them would delete a decision rule -- exactly what `fix` promises
+    never to do.
+    """
+    condition = flow_el.find("bpmn:conditionExpression", NS)
+    return (
+        flow_el.get("sourceRef"),
+        flow_el.get("targetRef"),
+        (flow_el.get("name") or "").strip(),
+        (condition.text or "").strip() if condition is not None else "",
+    )
+
+
 def _drop_duplicate_flows(process_el):
-    """Remove a second sequenceFlow that repeats an existing source -> target pair."""
+    """Remove a sequenceFlow that says exactly what an earlier one already says."""
     changes = []
     seen = {}
     for flow in list(process_el.findall("bpmn:sequenceFlow", NS)):
         src, tgt = flow.get("sourceRef"), flow.get("targetRef")
         if not src or not tgt or src == tgt:
             continue
-        if (src, tgt) in seen:
-            process_el.remove(flow)
-            changes.append(
-                f"duplicate-flow: removed '{flow.get('id')}' ({src} -> {tgt}), already connected "
-                f"by '{seen[(src, tgt)]}'")
-        else:
-            seen[(src, tgt)] = flow.get("id")
+        signature = _flow_signature(flow)
+        if signature not in seen:
+            seen[signature] = flow.get("id")
+            continue
+
+        removed_id, survivor_id = flow.get("id"), seen[signature]
+        process_el.remove(flow)
+        changes.append(
+            f"duplicate-flow: removed '{removed_id}' ({src} -> {tgt}), identical to "
+            f"'{survivor_id}' down to its label and condition")
+        # A gateway pointing at the flow we just removed would be left naming a
+        # branch that no longer leaves it -- turning a clean file into a broken
+        # one. Move the marker to the flow that survived, which is the same
+        # branch by every property that defines it.
+        for node in process_el:
+            if node.get("default") == removed_id:
+                node.set("default", survivor_id)
+                changes.append(
+                    f"default-flow-invalid: '{node.get('id')}' pointed at the removed "
+                    f"'{removed_id}'; its default flow is now '{survivor_id}'")
     return changes
 
 

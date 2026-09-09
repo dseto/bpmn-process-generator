@@ -19,6 +19,21 @@ REFERENCES_DIR = TESTS_DIR.parent / "references"
 CLEAN_DIAGRAM = TESTS_DIR / "01-user-onboarding.bpmn"
 BROKEN_DIAGRAM = REFERENCES_DIR / "example-broken.bpmn"
 
+# A gateway with one way in and one way out: style advice (useless-gateway),
+# nothing that should ever fail a build.
+INFO_SPEC = {
+    "id": "Process_ComInfo",
+    "nodes": [
+        {"id": "inicio", "type": "start", "name": "Começou"},
+        {"id": "passagem", "type": "xor", "name": "Passagem"},
+        {"id": "fim", "type": "end", "name": "Terminou"},
+    ],
+    "flows": [
+        {"from": "inicio", "to": "passagem"},
+        {"from": "passagem", "to": "fim"},
+    ],
+}
+
 WARNING_SPEC = {
     "id": "Process_ComAviso",
     "nodes": [
@@ -94,10 +109,16 @@ def test_json_output_stays_json_when_the_file_is_not_well_formed(tmp_path, capsy
 
 
 def test_json_output_includes_info_level_findings(tmp_path, capsys):
-    diagram = warning_diagram(tmp_path)
+    """A style finding must reach the report, not be filtered out on the way."""
+    spec_path = tmp_path / "com-info-spec.json"
+    spec_path.write_text(json.dumps(INFO_SPEC, ensure_ascii=False), encoding="utf-8")
+    diagram = run_build(spec_path, tmp_path / "com-info.bpmn", copy_editor=False).output
+
     run_cli(["validate", str(diagram), "--json"])
     payload = json.loads(capsys.readouterr().out)
-    assert payload["counts"]["warn"] >= 1
+
+    assert payload["counts"]["info"] >= 1
+    assert "useless-gateway" in {f["rule"] for f in payload["findings"] if f["severity"] == "info"}
 
 
 # ---------------------------------------------------------------------------
@@ -124,9 +145,17 @@ def test_strict_and_json_can_be_combined(tmp_path, capsys):
 
 def test_info_findings_alone_do_not_fail_even_under_strict(tmp_path, capsys):
     """Style advice is never a gate: only errors and warnings can fail a build."""
-    run_cli(["validate", str(CLEAN_DIAGRAM), "--json"])
+    spec_path = tmp_path / "so-info-spec.json"
+    spec_path.write_text(json.dumps(INFO_SPEC, ensure_ascii=False), encoding="utf-8")
+    diagram = run_build(spec_path, tmp_path / "so-info.bpmn", copy_editor=False).output
+
+    exit_code = run_cli(["validate", str(diagram), "--strict", "--json"])
     payload = json.loads(capsys.readouterr().out)
-    assert payload["counts"]["info"] == 0 or payload["ok"] is True
+
+    assert payload["counts"]["info"] >= 1, "this fixture exists to carry info findings"
+    assert payload["counts"]["error"] == 0 and payload["counts"]["warn"] == 0
+    assert payload["ok"] is True
+    assert exit_code == 0, "info findings must never fail a build, not even under --strict"
 
 
 # ---------------------------------------------------------------------------

@@ -15,10 +15,22 @@ Enhanced with:
 - In-diagram SearchPad (Ctrl+F)
 - High-resolution PNG and vector SVG exports
 """
+import base64
 import json
+import re
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
+
+# Where a human can drop the bpmn-js distribution so the editor stops depending
+# on the network. See assets/vendor/README.md.
+VENDOR_DIR = ROOT_DIR / "assets" / "vendor"
+VENDOR_JS = "bpmn-modeler.production.min.js"
+VENDOR_DIAGRAM_CSS = "diagram-js.css"
+VENDOR_BPMN_CSS = "bpmn.css"
+VENDOR_FONT = "bpmn.woff"
+
+CDN_BASE = "https://unpkg.com/bpmn-js@17.0.0/dist"
 
 # Version of the editor handed to a project. Bump it whenever this generator
 # changes: `bpmn_tool.copy_editor_if_needed` compares it against the copy already
@@ -65,7 +77,53 @@ for name, path in PRESET_FILES.items():
 
 presets_json = json.dumps(presets_data, ensure_ascii=False)
 
-html_content = f"""<!DOCTYPE html>
+
+def _embed_font(css, vendor_dir):
+    """Replace the bpmn font URL with a data: URI, so no request leaves the page."""
+    font = vendor_dir / VENDOR_FONT
+    if not font.exists():
+        return css
+    encoded = base64.b64encode(font.read_bytes()).decode("ascii")
+    return re.sub(
+        r"url\(['\"]?[^)'\"]*bpmn\.woff[^)'\"]*['\"]?\)",
+        f"url('data:font/woff;base64,{encoded}')",
+        css,
+    )
+
+
+def head_assets(vendor_dir):
+    """
+    The <head> block that brings bpmn-js in.
+
+    All three assets or none: a half-vendored directory would load two files
+    locally and silently miss the third, which is worse than the CDN. The mode
+    is stamped in a meta tag so the delivered editor says how it was built.
+    """
+    required = [vendor_dir / VENDOR_JS, vendor_dir / VENDOR_DIAGRAM_CSS, vendor_dir / VENDOR_BPMN_CSS]
+    if all(path.exists() for path in required):
+        script, diagram_css, bpmn_css = (path.read_text(encoding="utf-8") for path in required)
+        bpmn_css = _embed_font(bpmn_css, vendor_dir)
+        # A closing tag inside the bundle would end the script element early.
+        script = script.replace("</script", r"<\/script")
+        return (
+            '<meta name="bpmn-editor-assets" content="vendored" />\n'
+            "<!-- bpmn-js v17.0.0 (Modeler) embutido: o editor abre sem rede -->\n"
+            f"<style>\n{diagram_css}\n{bpmn_css}\n</style>\n"
+            f"<script>\n{script}\n</script>"
+        )
+    return (
+        '<meta name="bpmn-editor-assets" content="cdn" />\n'
+        "<!-- bpmn-js v17.0.0 (Modeler) -->\n"
+        f'<link rel="stylesheet" href="{CDN_BASE}/assets/diagram-js.css" />\n'
+        f'<link rel="stylesheet" href="{CDN_BASE}/assets/bpmn-font/css/bpmn.css" />\n'
+        f'<script src="{CDN_BASE}/bpmn-modeler.production.min.js"></script>'
+    )
+
+
+def render_editor_html(vendor_dir=None):
+    """Render the whole editor, embedding bpmn-js when it has been vendored."""
+    assets = head_assets(VENDOR_DIR if vendor_dir is None else Path(vendor_dir))
+    return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8" />
@@ -73,10 +131,7 @@ html_content = f"""<!DOCTYPE html>
 <meta name="bpmn-editor-version" content="{EDITOR_VERSION}" />
 <meta name="bpmn-editor-hash" content="" />
 <title>BPMN Editor Central</title>
-<!-- bpmn-js v17.0.0 (Modeler) -->
-<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.0/dist/assets/diagram-js.css" />
-<link rel="stylesheet" href="https://unpkg.com/bpmn-js@17.0.0/dist/assets/bpmn-font/css/bpmn.css" />
-<script src="https://unpkg.com/bpmn-js@17.0.0/dist/bpmn-modeler.production.min.js"></script>
+{assets}
 
 <style>
   :root {{
@@ -1223,9 +1278,11 @@ html_content = f"""<!DOCTYPE html>
     }}
 
     function distributeSelection(axis) {{
+      // O distributeElements do bpmn-js reposiciona os elementos DO MEIO: com
+      // dois selecionados não há meio, então ele não teria o que fazer.
       const selected = getSelectedElements().filter(el => !el.waypoints);
       if (selected.length < 3) {{
-        showToast('Selecione pelo menos 2 elementos para distribuir (o ideal são 3+)');
+        showToast('Selecione pelo menos 3 elementos para distribuir o espaçamento');
         return;
       }}
       try {{
@@ -1910,10 +1967,16 @@ html_content = f"""<!DOCTYPE html>
 </html>
 """
 
+html_content = render_editor_html()
+
+
 def main():
     output_path = ROOT_DIR / "editor.html"
-    output_path.write_text(html_content, encoding="utf-8")
-    print(f"[OK] Generated central editor at: {output_path} ({len(html_content)} bytes)")
+    content = render_editor_html()
+    output_path.write_text(content, encoding="utf-8")
+    mode = "offline (bpmn-js embutido)" if 'content="vendored"' in content else "CDN (unpkg)"
+    size = output_path.stat().st_size
+    print(f"[OK] Generated central editor at: {output_path} ({size} bytes on disk) -- assets: {mode}")
 
 
 if __name__ == "__main__":

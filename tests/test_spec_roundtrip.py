@@ -224,6 +224,65 @@ def test_extracting_a_file_without_a_process_is_rejected(tmp_path):
         extract_spec(empty)
 
 
+def test_extracting_an_expanded_subprocess_warns_that_its_content_is_lost(tmp_path, capsys):
+    """
+    The spec format does not carry the inside of a subprocess. Extracting one
+    silently would hand back a spec that rebuilds a smaller process than the
+    file on disk -- so it must say so.
+    """
+    source = tmp_path / "com-subprocesso.bpmn"
+    source.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="D_1">'
+        '  <bpmn:process id="Process_1">'
+        '    <bpmn:startEvent id="Start_1" name="Começou" />'
+        '    <bpmn:subProcess id="SubProcess_Cobranca" name="Cobrança">'
+        '      <bpmn:startEvent id="Start_Interno" name="Início interno" />'
+        '      <bpmn:endEvent id="End_Interno" name="Fim interno" />'
+        '    </bpmn:subProcess>'
+        '    <bpmn:endEvent id="End_1" name="Terminou" />'
+        '    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="SubProcess_Cobranca" />'
+        '    <bpmn:sequenceFlow id="Flow_2" sourceRef="SubProcess_Cobranca" targetRef="End_1" />'
+        '  </bpmn:process>'
+        '</bpmn:definitions>',
+        encoding="utf-8",
+    )
+
+    spec = extract_spec(source)
+
+    err = capsys.readouterr().err
+    assert "SubProcess_Cobranca" in err
+    assert "subprocess" in err.lower()
+    assert any(node["id"] == "SubProcess_Cobranca" for node in spec["nodes"])
+
+
+def test_extracting_a_file_with_several_pools_warns_that_only_one_is_taken(tmp_path, capsys):
+    source = tmp_path / "dois-pools.bpmn"
+    source.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="D_1">'
+        '  <bpmn:process id="Process_Cliente">'
+        '    <bpmn:startEvent id="Start_A" name="Pedido feito" />'
+        '  </bpmn:process>'
+        '  <bpmn:process id="Process_Fornecedor">'
+        '    <bpmn:startEvent id="Start_B" name="Pedido recebido" />'
+        '  </bpmn:process>'
+        '</bpmn:definitions>',
+        encoding="utf-8",
+    )
+
+    spec = extract_spec(source)
+
+    err = capsys.readouterr().err
+    assert "2 processes" in err
+    assert spec["id"] == "Process_Cliente"
+
+
+def test_a_single_process_file_extracts_without_warnings(capsys):
+    extract_spec(TESTS_DIR / "01-user-onboarding.bpmn")
+    assert capsys.readouterr().err == ""
+
+
 def test_extracting_a_malformed_file_is_rejected(tmp_path):
     broken = tmp_path / "quebrado.bpmn"
     broken.write_text("<bpmn:definitions>", encoding="utf-8")

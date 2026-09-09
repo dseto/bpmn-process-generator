@@ -1,0 +1,14 @@
+{
+  "feature_id": "T-15",
+  "contract": "bpmn-skill-upgrade",
+  "desc": "O editor permite alinhar e distribuir elementos selecionados e gerar um PDF do diagrama",
+  "files": [
+    "scripts/generate_editor_html.py",
+    "editor.html",
+    "tests/test_editor_features.py"
+  ],
+  "verify_cmd": "pytest tests/test_editor_features.py -q",
+  "recorded_at": "2026-09-09T11:41:57.641550+00:00",
+  "exit_code": 0,
+  "files_hash": "sha256:488e8f764ae6d6d0b5709d367a5fade5b372098cb3c79dab841af2429b4b7701"
+}

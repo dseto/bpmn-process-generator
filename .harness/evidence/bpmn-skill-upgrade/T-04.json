@@ -7,7 +7,7 @@
     "tests/test_spec_roundtrip.py"
   ],
   "verify_cmd": "pytest tests/test_spec_roundtrip.py -q",
-  "recorded_at": "2026-09-09T10:54:50.420762+00:00",
+  "recorded_at": "2026-09-09T11:41:38.743640+00:00",
   "exit_code": 0,
-  "files_hash": "sha256:217d5618f1ce772116352b3d9ef70994d415c877a80b99196826d8055978a8b2"
+  "files_hash": "sha256:2450ce023085cc8770e61f46cfbafff97750ad78e8af5896ac4049d9ac336be1"
 }

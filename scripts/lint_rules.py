@@ -644,18 +644,34 @@ def _unnamed_element(document):
 
 @register("duplicate-flow", "warn")
 def _duplicate_flow(document):
+    """
+    Two flows saying the same thing between the same pair of nodes.
+
+    Label and condition count as part of what a flow says: two gateway branches
+    reaching the same task under different criteria are two different rules of
+    the process, not a duplicate.
+    """
+    from bpmn_tool import NS
+
     for process in document.processes:
         seen = {}
         for flow_id, src, tgt in process.edges:
             if src == tgt:
                 continue  # self-loop reports it
-            if (src, tgt) in seen:
+            element = process.element_of(flow_id)
+            label, condition_text = "", ""
+            if element is not None:
+                label = (element.get("name") or "").strip()
+                condition = element.find("bpmn:conditionExpression", NS)
+                condition_text = (condition.text or "").strip() if condition is not None else ""
+            signature = (src, tgt, label, condition_text)
+            if signature in seen:
                 yield _finding("duplicate-flow", process,
                                f"'{flow_id}' repeats the connection {src} -> {tgt} already made by "
-                               f"'{seen[(src, tgt)]}'",
+                               f"'{seen[signature]}', with the same label and condition",
                                element=flow_id, fixable=True)
             else:
-                seen[(src, tgt)] = flow_id
+                seen[signature] = flow_id
 
 
 @register("self-loop", "warn")

@@ -735,6 +735,7 @@ def test_the_broken_example_now_exercises_the_new_error_rules():
     fired = rules_fired(findings)
     expected = {
         "dangling-flow-ref",
+        "unreachable-node",
         "flow-refs-mismatch",
         "start-has-incoming",
         "end-has-outgoing",
@@ -744,3 +745,40 @@ def test_the_broken_example_now_exercises_the_new_error_rules():
     }
     assert expected <= fired, f"missing from the canonical broken example: {sorted(expected - fired)}"
     assert all(f.severity in lint_rules.SEVERITIES for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# Rules that had no test of their own
+# ---------------------------------------------------------------------------
+
+def test_a_file_without_a_process_is_an_error():
+    tree = ET.ElementTree(ET.fromstring(
+        '<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="D_1" />'))
+    assert "missing-process" in rules_fired(lint_rules.run_rules(tree))
+
+
+def test_an_element_without_an_id_is_reported_as_malformed():
+    tree = tree_from_spec(linear_spec())
+    process = tree.getroot()[0]
+    task = [c for c in process if c.tag.endswith("}userTask")][0]
+    del task.attrib["id"]
+    finding = [f for f in lint_rules.run_rules(tree) if f.rule == "malformed-element"][0]
+    assert "no id attribute" in finding.message
+
+
+def test_a_plane_pointing_at_another_process_is_an_error():
+    from bpmn_tool import BPMNDI_NS
+
+    tree = tree_from_spec(linear_spec())
+    plane = tree.getroot().find(f"{{{BPMNDI_NS}}}BPMNDiagram/{{{BPMNDI_NS}}}BPMNPlane")
+    plane.set("bpmnElement", "Process_Outro")
+    assert "missing-plane" in rules_fired(lint_rules.run_rules(tree))
+
+
+def test_a_boundary_event_attached_to_a_node_that_is_gone_is_an_error():
+    tree = tree_from_spec(boundary_spec())
+    process = tree.getroot()[0]
+    boundary = [c for c in process if c.tag.endswith("}boundaryEvent")][0]
+    boundary.set("attachedToRef", "Task_Fantasma")
+    fired = rules_fired(lint_rules.run_rules(tree))
+    assert "boundary-host-missing" in fired

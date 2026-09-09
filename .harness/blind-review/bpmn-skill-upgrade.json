@@ -1,0 +1,11 @@
+{
+  "contract": "bpmn-skill-upgrade",
+  "verdicts": [
+    {
+      "verdict": "pass",
+      "evidence": "Verificacao independente em duas rodadas por agente sem contexto da implementacao. Rodada 1: REPROVADO com 9 achados - regressao em tests/test_bpmn_tool.py:79 (example-broken perdeu o no inalcancavel), T-16 entregue como mecanismo e nao como estado ativo, fix apagando ramo de gateway com condicao distinta (scripts/bpmn_tool.py _drop_duplicate_flows), 2 testes ocos em tests/test_validate_output.py, 4 regras sem teste, extract silencioso com subProcess/multi-pool, mensagem do distribuir contradizendo o limiar, SKILL.md sem os recursos novos. Todos corrigidos. Rodada 2: APROVADO, com verificacao por mutacao do _flow_signature (suite quebra em tests/test_fix_command.py:197, provando que o teste tem dente), 304 testes verdes, os 6 diagramas de exemplo passando em --strict e editor.html byte-identico ao gerador. Achado novo N1 (fix deixava o default do gateway orfao ao remover duplicata exata) corrigido em scripts/bpmn_tool.py com teste em tests/test_fix_command.py; N2 (waypoint do example-broken apontando para o no errado), N3 (contagem de bytes do gerador) e N4 (ambiguidade do README sobre offline) tambem corrigidos",
+      "files_hash": "sha256:38e9c9a883cd0959f77a6ccb30041c6018421f0fd41dae71f1a128ea15a6d20f",
+      "recorded_at": "2026-09-09T11:40:50.137841+00:00"
+    }
+  ]
+}

@@ -143,12 +143,17 @@ python scripts/bpmn_build.py <caminho>/<processo>-spec.json -o <caminho>/<proces
 * O usuário abre o `editor.html` **local** copiado para a pasta do projeto (`file:///<caminho-do-projeto>/editor.html?file=<processo>.bpmn`).
 * O diretório padrão para abertura e salvamento é o próprio diretório do projeto.
 * Recursos de edição disponíveis:
+  * **Painel de Propriedades** (botão **"🧾 Propriedades"**): edita nome, documentação e tipo do elemento (converte entre tarefa de pessoa/sistema e entre gateways) e, ao selecionar uma conexão, a **condição da decisão** e a marcação de **fluxo padrão**. Tudo entra no histórico — `Ctrl+Z` desfaz.
+  * **Painel de Validação** (botão **"✅ Validar diagrama"**): checa as mesmas regras do linter (mesmos `rule` ids) e lista os achados; clicar num achado seleciona o elemento com defeito no canvas.
   * **Tipografia por elemento**: tamanho da fonte (`9px`–`20px`), **Negrito** (`Ctrl+B`) e *Itálico* (`Ctrl+I`) nos elementos selecionados, preservados em SVG e PNG.
   * **Redimensionamento de Tarefas**: alças de canto nas atividades.
   * **Roteamento 90°**: botão **"📐 Curva 90°"** para ortogonalizar conexões selecionadas ou todo o processo.
-  * **Alinhamento e Grade**: encaixe magnético na grade de 10 px.
+  * **Alinhar, Centralizar e Distribuir**: arruma a seleção (alinhar exige 2+ elementos; distribuir, 3+, porque reposiciona os do meio).
+  * **Grade**: encaixe magnético na grade de 10 px.
   * **Paleta de Cores**, **Histórico** (`Ctrl+Z` / `Ctrl+Y`) e **Busca** (`Ctrl+F`).
-  * **Exportação Gráfica**: SVG e PNG 2x com a tipografia intacta.
+  * **Exportação Gráfica**: SVG e PNG 2x com a tipografia intacta, e **🖨️ PDF** (abre a impressão do navegador com folha de estilo dedicada — escolha "Salvar como PDF").
+* **Modo offline (opcional)**: por padrão o editor carrega o bpmn-js do CDN. Colocando os arquivos da biblioteca em `assets/vendor/` e rodando `python scripts/generate_editor_html.py`, tudo passa a ser embutido no `editor.html` e ele abre sem internet — instruções em `assets/vendor/README.md`. O editor gerado declara em qual modo foi construído (`<meta name="bpmn-editor-assets">`).
+* **Atualização da cópia do projeto**: o editor entregue carrega versão; quando a skill evolui, uma cópia intacta é atualizada sozinha, e uma cópia com ajustes locais é preservada (o comando avisa como sobrescrever com `--force`).
 * Ajustes manuais são gravados diretamente no disco com **`Ctrl+S`**.
 
 ### Passo 5: Relatar ao Usuário

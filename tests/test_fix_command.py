@@ -162,6 +162,111 @@ def test_a_degenerate_edge_is_recomputed(tmp_path):
 # What it must never do
 # ---------------------------------------------------------------------------
 
+def test_two_gateway_branches_to_the_same_task_are_not_a_duplicate(tmp_path):
+    """
+    Two branches can legitimately reach the same task under different criteria.
+    Collapsing them would delete a decision rule of the process -- which is
+    exactly what this command promises never to do.
+    """
+    spec = {
+        "id": "Process_DoisCriterios",
+        "nodes": [
+            {"id": "inicio", "type": "start", "name": "Pedido recebido"},
+            {"id": "avaliar", "type": "xor", "name": "Precisa de análise?"},
+            {"id": "analisar", "type": "userTask", "name": "Analisar manualmente"},
+            {"id": "seguir", "type": "serviceTask", "name": "Seguir automaticamente"},
+            {"id": "fim", "type": "end", "name": "Pedido tratado"},
+        ],
+        "flows": [
+            {"from": "inicio", "to": "avaliar"},
+            {"from": "avaliar", "to": "analisar", "label": "Valor alto", "condition": "valor > 10000"},
+            {"from": "avaliar", "to": "analisar", "label": "Cliente novo", "condition": "cliente.novo == true"},
+            {"from": "avaliar", "to": "seguir", "label": "Rotina", "default": True},
+            {"from": "analisar", "to": "fim"},
+            {"from": "seguir", "to": "fim"},
+        ],
+    }
+    path = diagram(tmp_path, spec, name="dois-criterios")
+    before = ET.parse(path).getroot()[0]
+    conditions_before = len([c for c in before.iter() if c.tag.endswith("}conditionExpression")])
+
+    report = run_fix(path)
+
+    after = ET.parse(path).getroot()[0]
+    conditions_after = len([c for c in after.iter() if c.tag.endswith("}conditionExpression")])
+    assert conditions_after == conditions_before == 2, "a decision rule was deleted"
+    assert not any("duplicate-flow" in change for change in report.changes)
+    assert "duplicate-flow" not in rules_in(path), "different criteria are not a duplicate"
+
+
+def test_a_truly_identical_flow_is_still_removed(tmp_path):
+    """Same pair, same label, same condition: the second one adds nothing."""
+    spec = {
+        "id": "Process_Repetido",
+        "nodes": [
+            {"id": "inicio", "type": "start", "name": "Começou"},
+            {"id": "avaliar", "type": "xor", "name": "Segue?"},
+            {"id": "fazer", "type": "userTask", "name": "Fazer algo"},
+            {"id": "parar", "type": "userTask", "name": "Parar"},
+            {"id": "fim", "type": "end", "name": "Terminou"},
+        ],
+        "flows": [
+            {"from": "inicio", "to": "avaliar"},
+            {"from": "avaliar", "to": "fazer", "label": "Sim", "condition": "segue == true"},
+            {"from": "avaliar", "to": "fazer", "label": "Sim", "condition": "segue == true"},
+            {"from": "avaliar", "to": "parar", "label": "Não", "default": True},
+            {"from": "fazer", "to": "fim"},
+            {"from": "parar", "to": "fim"},
+        ],
+    }
+    path = diagram(tmp_path, spec, name="repetido")
+    assert "duplicate-flow" in rules_in(path)
+
+    run_fix(path)
+
+    assert "duplicate-flow" not in rules_in(path)
+
+
+def test_removing_a_duplicate_that_was_the_default_branch_keeps_the_gateway_valid(tmp_path):
+    """
+    Dropping the flow a gateway names as its default would leave the gateway
+    pointing at a branch that no longer exists -- `fix` turning a clean file
+    into a broken one.
+    """
+    path = diagram(tmp_path, {
+        "id": "Process_DefaultDuplicado",
+        "nodes": [
+            {"id": "inicio", "type": "start", "name": "Começou"},
+            {"id": "avaliar", "type": "xor", "name": "Segue?"},
+            {"id": "tratar", "type": "userTask", "name": "Tratar"},
+            {"id": "parar", "type": "userTask", "name": "Parar"},
+            {"id": "fim", "type": "end", "name": "Terminou"},
+        ],
+        "flows": [
+            {"from": "inicio", "to": "avaliar"},
+            {"from": "avaliar", "to": "parar", "label": "Não", "condition": "segue == false"},
+            {"from": "avaliar", "to": "tratar"},
+            {"from": "avaliar", "to": "tratar", "default": True},
+            {"from": "tratar", "to": "fim"},
+            {"from": "parar", "to": "fim"},
+        ],
+    }, name="default-duplicado")
+
+    process = ET.parse(path).getroot()[0]
+    gateway = [c for c in process if c.tag.endswith("}exclusiveGateway")][0]
+    assert gateway.get("default") == "Flow_4", "fixture: the default is the duplicated flow"
+
+    report = run_fix(path)
+
+    fixed = ET.parse(path).getroot()[0]
+    fixed_gateway = [c for c in fixed if c.tag.endswith("}exclusiveGateway")][0]
+    surviving = [c.get("id") for c in fixed if c.tag.endswith("}sequenceFlow")]
+
+    assert fixed_gateway.get("default") in surviving, "the default names a flow that is gone"
+    assert "default-flow-invalid" not in rules_in(path)
+    assert any("default" in change for change in report.changes), "the move must be reported"
+
+
 def test_fix_never_invents_an_end_event(tmp_path):
     spec = {
         "id": "Process_SemFim",
