@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="bpmn-editor-version" content="1.1.0" />
+<meta name="bpmn-editor-version" content="1.2.0" />
 <meta name="bpmn-editor-hash" content="" />
 <title>BPMN Editor Central</title>
 <meta name="bpmn-editor-assets" content="cdn" />
@@ -414,6 +414,41 @@
     white-space: pre-wrap;
   }
 
+  #notice-banner {
+    position: fixed;
+    top: 60px;
+    right: 20px;
+    max-width: 520px;
+    z-index: 2400;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  #notice-banner .notice {
+    background: #1e3a5f;
+    color: #ffffff;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    border-left: 4px solid #f59e0b;
+  }
+  #notice-banner .notice-actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  #notice-banner .notice-actions button {
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.12);
+    color: #ffffff;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
   #drop-overlay {
     display: none;
     position: fixed;
@@ -629,6 +664,7 @@
 <input type="file" id="file-input" accept=".bpmn,.xml" style="display:none" />
 
 <div id="error-banner"></div>
+<div id="notice-banner" role="status" aria-live="polite"></div>
 
 <div id="workspace">
   <div id="canvas"></div>
@@ -740,6 +776,20 @@
 
   let elementFontStyles = {};
 
+  // Estado de sincronização com o disco (F1.5-F1.7)
+  let diskUrl = null;            // URL relativa do arquivo quando lido via fetch (http/https)
+  let lastDiskText = null;       // último conteúdo conhecido do arquivo em disco; null = sem referência
+  let ignoredDiskText = null;    // versão do disco que o usuário já escolheu ignorar
+  let diskCheckBusy = false;
+  // `loadXML` mora no bloco que cria o modeler; os avisos globais chamam por este atalho.
+  let loadXMLImpl = null;
+  function loadDiagram(xml, name, handle, options) {
+    return loadXMLImpl(xml, name, handle, options);
+  }
+  let draftTimer = null;
+  let draftRecoveryPending = false;
+  const noticeBanner = document.getElementById('notice-banner');
+
   function showToast(msg) {
     toast.textContent = msg;
     toast.classList.add('show');
@@ -756,10 +806,24 @@
     errorBanner.textContent = '';
   }
 
+  // Aviso do navegador ao fechar/recarregar: registrado SOMENTE enquanto houver
+  // alterações não salvas (ver setFileState).
+  function beforeUnloadHandler(e) {
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  }
+
   function setFileState(name, handle = null, dirty = false) {
     currentFileName = name;
     currentFileHandle = handle;
     isDirty = dirty;
+    if (dirty) {
+      window.addEventListener('beforeunload', beforeUnloadHandler);
+    } else {
+      window.removeEventListener('beforeunload', beforeUnloadHandler);
+      cancelDraftSave();
+    }
     currentFileNameEl.textContent = name + (dirty ? ' *' : '');
     document.title = (dirty ? '● ' : '') + name + ' — BPMN Editor';
     if (dirty) {
@@ -779,6 +843,202 @@
       btnRedo.disabled = !cs.canRedo();
     } catch (e) {}
   }
+
+  // ---------------------------------------------------------------------
+  // Avisos não bloqueantes (banners com ações). Substituem confirm() onde a
+  // decisão do usuário não pode travar o fluxo (rascunho, arquivo mudou no disco).
+  // ---------------------------------------------------------------------
+  function hideNotice(id) {
+    const el = document.getElementById('notice-' + id);
+    if (el) el.remove();
+  }
+
+  function showNotice(id, message, actions, closable = true) {
+    hideNotice(id);
+    const box = document.createElement('div');
+    box.className = 'notice';
+    box.id = 'notice-' + id;
+    const text = document.createElement('div');
+    text.className = 'notice-text';
+    text.textContent = message;
+    box.appendChild(text);
+    const bar = document.createElement('div');
+    bar.className = 'notice-actions';
+    (actions || []).concat(closable ? [{ label: 'Fechar aviso', handler: null }] : []).forEach(action => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = action.label;
+      btn.addEventListener('click', () => {
+        hideNotice(id);
+        if (action.handler) action.handler();
+      });
+      bar.appendChild(btn);
+    });
+    box.appendChild(bar);
+    noticeBanner.appendChild(box);
+  }
+
+  // ---------------------------------------------------------------------
+  // Rascunho automático (localStorage). Tudo em try/catch: modo privado, cota
+  // cheia ou storage bloqueado nunca podem quebrar a edição.
+  // ---------------------------------------------------------------------
+  function draftKey(name) {
+    return 'bpmn-editor-draft:' + window.location.pathname + '::' + (name || currentFileName);
+  }
+
+  function readDraft(name) {
+    try {
+      const raw = window.localStorage.getItem(draftKey(name));
+      const draft = raw ? JSON.parse(raw) : null;
+      return draft && typeof draft.xml === 'string' ? draft : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function writeDraft(xml) {
+    try {
+      window.localStorage.setItem(draftKey(), JSON.stringify({
+        xml: xml, name: currentFileName, savedAt: Date.now()
+      }));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function clearDraft(name) {
+    try {
+      window.localStorage.removeItem(draftKey(name));
+    } catch (e) {}
+  }
+
+  function cancelDraftSave() {
+    if (draftTimer) {
+      clearTimeout(draftTimer);
+      draftTimer = null;
+    }
+  }
+
+  function scheduleDraftSave() {
+    cancelDraftSave();
+    draftTimer = setTimeout(async () => {
+      draftTimer = null;
+      // Enquanto a oferta de recuperação está pendente, o rascunho antigo não é sobrescrito.
+      if (!isDirty || !modeler || draftRecoveryPending) return;
+      try {
+        const { xml } = await modeler.saveXML({ format: true });
+        if (isDirty && !draftRecoveryPending) writeDraft(xml);
+      } catch (e) {}
+    }, 400);
+  }
+
+  function offerDraftRecovery() {
+    const draft = readDraft();
+    if (!draft) return;
+    draftRecoveryPending = true;
+    const when = new Date(draft.savedAt || Date.now()).toLocaleString();
+    showNotice('draft',
+      `Há um rascunho não salvo de '${currentFileName}' (${when}). Deseja recuperá-lo?`,
+      [
+        { label: 'Recuperar rascunho', handler: async () => {
+          draftRecoveryPending = false;
+          await loadDiagram(draft.xml, currentFileName, currentFileHandle, { keepDiskRef: true });
+          setFileState(currentFileName, currentFileHandle, true);
+          scheduleDraftSave();
+        } },
+        { label: 'Descartar rascunho', handler: () => {
+          draftRecoveryPending = false;
+          clearDraft();
+        } }
+      ], false);
+  }
+
+  // ---------------------------------------------------------------------
+  // Arquivo em disco: leitura, detecção de mudança externa e proteção contra
+  // sobrescrita silenciosa.
+  // ---------------------------------------------------------------------
+  function normalizeXmlText(text) {
+    return String(text || '').replace(/\r\n/g, '\n').trim();
+  }
+
+  async function fetchDiskText(url) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      return res.ok ? await res.text() : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  async function readDiskText() {
+    if (currentFileHandle && currentFileHandle.getFile) {
+      const file = await currentFileHandle.getFile();
+      return await file.text();
+    }
+    if (diskUrl) return await fetchDiskText(diskUrl);
+    return null;
+  }
+
+  async function reloadFromDisk(text) {
+    hideNotice('disk-changed');
+    clearDraft();
+    await loadDiagram(text, currentFileName, currentFileHandle, { fromDisk: true, url: diskUrl });
+  }
+
+  async function checkDiskChange() {
+    if (diskCheckBusy || lastDiskText === null || !modeler) return;
+    if (!currentFileHandle && !diskUrl) return;
+    diskCheckBusy = true;
+    try {
+      const text = await readDiskText();
+      if (text !== null && text !== lastDiskText && text !== ignoredDiskText) {
+        showNotice('disk-changed',
+          `O arquivo '${currentFileName}' foi alterado no disco enquanto o editor estava aberto` +
+          (isDirty ? ' e há alterações não salvas aqui.' : '.'),
+          [
+            { label: 'Recarregar do disco', handler: async () => {
+              if (isDirty && !confirm('Recarregar do disco descarta as alterações não salvas. Continuar?')) {
+                ignoredDiskText = null;
+                return;
+              }
+              await reloadFromDisk(text);
+            } },
+            { label: 'Manter minha versão', handler: () => { ignoredDiskText = text; } }
+          ]);
+      }
+    } catch (e) {
+      // Sem permissão/arquivo indisponível: não há o que comparar.
+    } finally {
+      diskCheckBusy = false;
+    }
+  }
+
+  // Antes de gravar num arquivo já aberto, confere se o disco ainda é o que foi lido.
+  async function confirmOverwriteIfDiskChanged() {
+    if (lastDiskText === null) return true;
+    let text = null;
+    try {
+      text = await readDiskText();
+    } catch (e) {
+      return true;
+    }
+    if (text === null || text === lastDiskText) return true;
+    return confirm(`O arquivo '${currentFileName}' foi alterado no disco depois de aberto neste editor. ` +
+      'Salvar agora vai SOBRESCREVER essa versão mais nova. Sobrescrever mesmo assim?');
+  }
+
+  // Pergunta antes de qualquer ação que descartaria alterações não salvas.
+  function confirmDiscardIfDirty(message) {
+    if (!isDirty) return true;
+    return confirm(message);
+  }
+
+  window.addEventListener('focus', () => { checkDiskChange(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkDiskChange();
+  });
+  setInterval(() => { checkDiskChange(); }, 5000);
 
   // Módulo de regras customizadas para permitir redimensionamento de tarefas (Task Resize)
   const CustomResizeModule = {
@@ -807,6 +1067,170 @@
     }]
   };
 
+  // ---------------------------------------------------------------------
+  // Fonte gravada no DI do BPMN: bpmndi:BPMNLabel -> bpmndi:BPMNLabelStyle ->
+  // dc:Font. A alteração passa pelo commandStack ('element.setFontStyle'),
+  // então desfazer/refazer e o estado "não salvo" funcionam, e o estilo
+  // sobrevive a salvar/reabrir. `elementFontStyles` é apenas o espelho,
+  // derivado do DI, usado para pintar o CSS (ver applyAllElementFontStyles).
+  // Sem informação de fonte vale o padrão: 12 px, sem negrito/itálico.
+  // ---------------------------------------------------------------------
+  const FONT_DEFAULT_SIZE = 12;
+
+  // No bpmn-js 17 o DI mora no elemento do diagrama (`element.di`); ler `businessObject.di` lança erro.
+  function diOf(element) {
+    return (element && element.di) || null;
+  }
+
+  function isStyleableDi(di) {
+    return !!di && typeof di.$instanceOf === 'function' &&
+      (di.$instanceOf('bpmndi:BPMNShape') || di.$instanceOf('bpmndi:BPMNEdge'));
+  }
+
+  function fontOfElement(element) {
+    const di = diOf(element);
+    const font = isStyleableDi(di) && di.label && di.label.labelStyle && di.label.labelStyle.font;
+    return {
+      size: (font && Number(font.size) > 0) ? Number(font.size) : FONT_DEFAULT_SIZE,
+      isBold: !!(font && font.isBold),
+      isItalic: !!(font && font.isItalic)
+    };
+  }
+
+  function isDefaultFont(font) {
+    return font.size === FONT_DEFAULT_SIZE && !font.isBold && !font.isItalic;
+  }
+
+  function diagramOfDi(di) {
+    let node = di;
+    while (node && !(typeof node.$instanceOf === 'function' && node.$instanceOf('bpmndi:BPMNDiagram'))) {
+      node = node.$parent;
+    }
+    return node || null;
+  }
+
+  function sameFont(style, font) {
+    const f = style && style.font;
+    return !!f && !f.name && (Number(f.size) || FONT_DEFAULT_SIZE) === font.size &&
+      !!f.isBold === font.isBold && !!f.isItalic === font.isItalic;
+  }
+
+  function styleIsReferenced(diagram, style) {
+    const plane = diagram.plane;
+    return !!plane && (plane.planeElement || []).some(di => di.label && di.label.labelStyle === style);
+  }
+
+  // Comando único (um desfazer) que troca a fonte de vários elementos.
+  function SetFontStyleHandler(moddle) {
+    this._moddle = moddle;
+  }
+  SetFontStyleHandler.$inject = ['moddle'];
+
+  SetFontStyleHandler.prototype.execute = function(context) {
+    const moddle = this._moddle;
+    const labels = [];
+    const diagrams = [];
+    const touched = [];
+    const candidates = [];
+
+    context.changes.forEach(change => {
+      const di = diOf(change.element);
+      if (!isStyleableDi(di)) return;
+      const diagram = diagramOfDi(di);
+      if (!diagram) return;
+      const styles = diagram.get('labelStyle');
+      if (!diagrams.some(d => d.diagram === diagram)) {
+        diagrams.push({ diagram: diagram, styles: styles.slice() });
+      }
+
+      const oldLabel = di.label;
+      labels.push({ di: di, label: oldLabel });
+      if (oldLabel && oldLabel.labelStyle) candidates.push({ diagram: diagram, style: oldLabel.labelStyle });
+
+      let style;
+      if (!isDefaultFont(change.font)) {
+        style = styles.find(s => sameFont(s, change.font));
+        if (!style) {
+          style = moddle.create('bpmndi:BPMNLabelStyle', {
+            font: moddle.create('dc:Font', {
+              size: change.font.size,
+              isBold: change.font.isBold,
+              isItalic: change.font.isItalic
+            })
+          });
+          style.id = moddle.ids.nextPrefixed('LabelStyle_', style);
+          styles.push(style);
+        }
+      }
+
+      const attrs = {};
+      if (oldLabel && oldLabel.bounds) attrs.bounds = oldLabel.bounds;
+      if (style) attrs.labelStyle = style;
+      di.set('label', (attrs.bounds || attrs.labelStyle) ? moddle.create('bpmndi:BPMNLabel', attrs) : undefined);
+      touched.push(change.element);
+    });
+
+    // Estilos que ficaram sem uso saem do diagrama (só os que este comando liberou).
+    candidates.forEach(c => {
+      const styles = c.diagram.get('labelStyle');
+      const idx = styles.indexOf(c.style);
+      if (idx !== -1 && !styleIsReferenced(c.diagram, c.style)) styles.splice(idx, 1);
+    });
+
+    context.snapshot = { labels: labels, diagrams: diagrams };
+    return touched;
+  };
+
+  SetFontStyleHandler.prototype.revert = function(context) {
+    const snapshot = context.snapshot;
+    const touched = [];
+    snapshot.labels.forEach(entry => {
+      entry.di.set('label', entry.label);
+    });
+    snapshot.diagrams.forEach(entry => {
+      const styles = entry.diagram.get('labelStyle');
+      styles.splice(0, styles.length);
+      entry.styles.forEach(s => styles.push(s));
+    });
+    context.changes.forEach(change => touched.push(change.element));
+    return touched;
+  };
+
+  // Registra o comando no commandStack (módulo adicional passado ao BpmnJS).
+  function FontStyleCommands(commandStack) {
+    commandStack.registerHandler('element.setFontStyle', SetFontStyleHandler);
+  }
+  FontStyleCommands.$inject = ['commandStack'];
+  const FontStyleModule = {
+    __init__: ['fontStyleCommands'],
+    fontStyleCommands: ['type', FontStyleCommands]
+  };
+
+  // Espelho derivado do DI: só elementos com fonte diferente do padrão.
+  function refreshFontStylesFromDiagram() {
+    const mirror = {};
+    try {
+      modeler.get('elementRegistry').forEach(el => {
+        if (el.labelTarget) return;
+        const font = fontOfElement(el);
+        if (isDefaultFont(font)) return;
+        mirror[el.id] = { fontSize: font.size + 'px', isBold: font.isBold, isItalic: font.isItalic };
+      });
+    } catch (e) {}
+    elementFontStyles = mirror;
+  }
+
+  // Aplica `change(fontAtual)` a cada elemento selecionado, num único comando.
+  function applyFontChange(selection, change) {
+    const changes = selection
+      .filter(el => isStyleableDi(diOf(el)))
+      .map(el => ({ element: el, font: change(fontOfElement(el)), before: fontOfElement(el) }))
+    .filter(c => c.font.size !== c.before.size || c.font.isBold !== c.before.isBold || c.font.isItalic !== c.before.isItalic);
+  if (changes.length === 0) return 0;
+    modeler.get('commandStack').execute('element.setFontStyle', { changes: changes });
+    return changes.length;
+  }
+
   if (typeof BpmnJS === 'undefined') {
     showError('Não foi possível carregar a biblioteca bpmn-js do CDN. Verifique sua conexão com a internet.');
   } else {
@@ -815,7 +1239,8 @@
       keyboard: { bindTo: document },
       gridSnapping: { active: true },
       additionalModules: [
-        CustomResizeModule
+        CustomResizeModule,
+        FontStyleModule
       ]
     });
 
@@ -824,11 +1249,13 @@
       if (!isDirty) setFileState(currentFileName, currentFileHandle, true);
       updateUndoRedoState();
       applyAllElementFontStyles();
+      updateFontToolbarFromSelection(getSelectedElements());
+      scheduleDraftSave();
     });
 
     // Atualiza controles de fonte na toolbar quando a seleção de elementos muda
     modeler.on('selection.changed', (e) => {
-      updateFontToolbarFromSelection(e.newSelection || []);
+      updateFontToolbarFromSelection(getSelectedElements());
       updatePropertiesPanel(e.newSelection || []);
     });
 
@@ -871,6 +1298,23 @@
       return !!element && element.type === 'bpmn:SequenceFlow';
     }
 
+    const TYPE_OPTIONS = Array.from(propType.options)
+      .filter(o => o.value)
+      .map(o => ({ value: o.value, label: o.textContent }));
+    const TYPE_GROUPS = [
+      {
+        members: ['bpmn:Task', 'bpmn:UserTask', 'bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:ReceiveTask',
+                  'bpmn:ManualTask', 'bpmn:BusinessRuleTask', 'bpmn:ScriptTask'],
+        offered: ['bpmn:Task', 'bpmn:UserTask', 'bpmn:ServiceTask', 'bpmn:SendTask', 'bpmn:ReceiveTask',
+                  'bpmn:ManualTask', 'bpmn:BusinessRuleTask']
+      },
+      {
+        members: ['bpmn:ExclusiveGateway', 'bpmn:ParallelGateway', 'bpmn:InclusiveGateway',
+                  'bpmn:EventBasedGateway', 'bpmn:ComplexGateway'],
+        offered: ['bpmn:ExclusiveGateway', 'bpmn:ParallelGateway', 'bpmn:InclusiveGateway']
+      }
+    ];
+
     function currentPropertyElement() {
       const selection = modeler.get('selection').get();
       return selection.length === 1 ? selection[0] : null;
@@ -909,8 +1353,32 @@
         propDefault.checked = !!(source && source.default && source.default.id === businessObject.id);
         propDefault.disabled = !source || !/Gateway/.test(source.$type || '');
       } else {
-        propType.value = '';
+        populateTypeSelector(element);
       }
+    }
+
+    // Seletor "Tipo do elemento": só tipos compatíveis com o elemento (tarefas entre
+    // si, gateways entre si), com o tipo ATUAL selecionado. Sem troca válida
+    // (eventos de início/fim, raias, subprocessos...) o campo inteiro fica oculto.
+    function populateTypeSelector(element) {
+      const group = TYPE_GROUPS.find(g => g.members.indexOf(element.type) !== -1);
+      propShapeFields.classList.toggle('hidden', !group);
+      propType.innerHTML = '';
+      if (!group) return;
+      const options = group.offered.map(value => ({
+        value: value,
+        label: (TYPE_OPTIONS.find(o => o.value === value) || { label: value.replace('bpmn:', '') }).label
+      }));
+      if (!options.some(o => o.value === element.type)) {
+        options.unshift({ value: element.type, label: element.type.replace('bpmn:', '') + ' (atual)' });
+      }
+      options.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o.value;
+        opt.textContent = o.label;
+        propType.appendChild(opt);
+      });
+      propType.value = element.type;
     }
 
     function applyPropertyName() {
@@ -1192,13 +1660,27 @@
       propertiesPanel.classList.toggle('hidden');
     });
 
-    async function loadXML(xml, name = "diagrama.bpmn", handle = null) {
+    // options.fromDisk: `xml` é o conteúdo lido do disco (arquivo/handle/fetch) e passa a ser a
+    //   referência para detectar mudanças externas (options.url = origem via fetch).
+    // options.keepDiskRef: mantém a referência de disco atual (ex.: recuperação de rascunho).
+    async function loadXML(xml, name = "diagrama.bpmn", handle = null, options = {}) {
       try {
         clearError();
+        if (isDirty && !options.keepDiskRef) {
+          // Chegar aqui com alterações pendentes significa que o usuário já confirmou o descarte.
+          cancelDraftSave();
+          clearDraft();
+        }
         elementFontStyles = {};
         updateFontToolbarFromSelection([]);
         updatePropertiesPanel([]);
         await modeler.importXML(xml);
+        if (!options.keepDiskRef) {
+          lastDiskText = options.fromDisk ? xml : null;
+          diskUrl = options.fromDisk ? (options.url || null) : null;
+          ignoredDiskText = null;
+          hideNotice('disk-changed');
+        }
         enforceOrthogonalConnections();
         applyAllElementFontStyles();
         try { modeler.get('commandStack').clear(); } catch (e) {}
@@ -1213,8 +1695,11 @@
       }
     }
 
+    loadXMLImpl = loadXML;
+
     // Abrir arquivo via File System Access API ou input fallback
     async function openFile() {
+      if (!confirmDiscardIfDirty('Você possui alterações não salvas. Deseja descartá-las para abrir outro arquivo?')) return;
       if (window.showOpenFilePicker) {
         try {
           const [handle] = await window.showOpenFilePicker({
@@ -1226,7 +1711,7 @@
           });
           const file = await handle.getFile();
           const text = await file.text();
-          await loadXML(text, file.name, handle);
+          await loadXML(text, file.name, handle, { fromDisk: true });
         } catch (err) {
           if (err.name !== 'AbortError') showError(err);
         }
@@ -1243,15 +1728,33 @@
       await loadXML(text, file.name, null);
     });
 
+    // Salvamento bem-sucedido: o rascunho deixa de ser necessário.
+    function afterSave(previousName) {
+      cancelDraftSave();
+      clearDraft();
+      if (previousName) clearDraft(previousName);
+      draftRecoveryPending = false;
+      hideNotice('draft');
+    }
+
     // Salvar diretamente no arquivo
     async function saveFile() {
       try {
         const { xml } = await modeler.saveXML({ format: true });
         if (currentFileHandle && currentFileHandle.createWritable) {
+          // Nunca sobrescrever em silêncio uma versão mais nova que está no disco.
+          if (!(await confirmOverwriteIfDiskChanged())) {
+            showToast('Salvamento cancelado: o arquivo no disco foi alterado.');
+            return;
+          }
           const writable = await currentFileHandle.createWritable();
           await writable.write(xml);
           await writable.close();
+          lastDiskText = xml;
+          ignoredDiskText = null;
+          hideNotice('disk-changed');
           setFileState(currentFileName, currentFileHandle, false);
+          afterSave();
           showToast(`Arquivo '${currentFileName}' salvo diretamente no disco!`);
           return;
         }
@@ -1264,6 +1767,7 @@
 
     // Salvar Como / Download
     async function saveFileAs() {
+      const previousName = currentFileName;
       try {
         const { xml } = await modeler.saveXML({ format: true });
         if (window.showSaveFilePicker) {
@@ -1278,7 +1782,12 @@
             const writable = await handle.createWritable();
             await writable.write(xml);
             await writable.close();
+            lastDiskText = xml;
+            diskUrl = null;
+            ignoredDiskText = null;
+            hideNotice('disk-changed');
             setFileState(handle.name, handle, false);
+            afterSave(previousName);
             showToast(`Arquivo salvo como '${handle.name}'!`);
             return;
           } catch (err) {
@@ -1297,6 +1806,7 @@
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         setFileState(currentFileName, currentFileHandle, false);
+        afterSave();
         showToast(`Download de '${currentFileName}' iniciado.`);
       } catch (err) {
         showError('Falha ao exportar: ' + err.message);
@@ -1352,19 +1862,27 @@
       }
     }
 
-    // Mapa de estilos tipográficos específicos por elemento: elementId -> fontSize, isBold, isItalic
+    // Seleção atual normalizada: um rótulo externo conta como o elemento dono dele,
+    // sem duplicatas (o estilo mora no DI do elemento, não no rótulo).
     function getSelectedElements() {
       if (!modeler) return [];
       try {
-        const selection = modeler.get('selection').get();
-        return selection || [];
+        const selection = modeler.get('selection').get() || [];
+        const result = [];
+        selection.forEach(el => {
+          const target = el.labelTarget || el;
+          if (result.indexOf(target) === -1) result.push(target);
+        });
+        return result;
       } catch (e) {
         return [];
       }
     }
 
+
     // Injeta/atualiza regras de estilo CSS específicas para os elementos estilizados
     function applyAllElementFontStyles() {
+      if (modeler) refreshFontStylesFromDiagram();
       const keys = Object.keys(elementFontStyles);
       let cssRules = '';
 
@@ -1494,14 +2012,13 @@
         fontSizeSelect.value = '12px';
         return;
       }
-      selection.forEach(el => {
-        if (!elementFontStyles[el.id]) {
-          elementFontStyles[el.id] = { fontSize: '12px', isBold: false, isItalic: false };
-        }
-        elementFontStyles[el.id].fontSize = val;
-      });
-      applyAllElementFontStyles();
-      showToast(`Tamanho da fonte (${val}) aplicado a ${selection.length} elemento(s).`);
+      const size = parseInt(val, 10) || FONT_DEFAULT_SIZE;
+      try {
+        const count = applyFontChange(selection, font => ({ size: size, isBold: font.isBold, isItalic: font.isItalic }));
+        showToast(`Tamanho da fonte (${size}px) aplicado a ${count} elemento(s).`);
+      } catch (err) {
+        showError('Erro ao alterar a fonte: ' + err.message);
+      }
     }
 
     function toggleBold() {
@@ -1510,17 +2027,13 @@
         showToast('Selecione um ou mais elementos para alternar negrito.');
         return;
       }
-      const allBold = selection.every(el => elementFontStyles[el.id] && elementFontStyles[el.id].isBold);
-      const newBold = !allBold;
-      selection.forEach(el => {
-        if (!elementFontStyles[el.id]) {
-          elementFontStyles[el.id] = { fontSize: '12px', isBold: false, isItalic: false };
-        }
-        elementFontStyles[el.id].isBold = newBold;
-      });
-      btnFontBold.classList.toggle('active', newBold);
-      applyAllElementFontStyles();
-      showToast(`Negrito ${newBold ? 'ativado' : 'desativado'} em ${selection.length} elemento(s).`);
+      const newBold = !selection.every(el => fontOfElement(el).isBold);
+      try {
+        const count = applyFontChange(selection, font => ({ size: font.size, isBold: newBold, isItalic: font.isItalic }));
+        showToast(`Negrito ${newBold ? 'ativado' : 'desativado'} em ${count} elemento(s).`);
+      } catch (err) {
+        showError('Erro ao alterar a fonte: ' + err.message);
+      }
     }
 
     function toggleItalic() {
@@ -1529,17 +2042,13 @@
         showToast('Selecione um ou mais elementos para alternar itálico.');
         return;
       }
-      const allItalic = selection.every(el => elementFontStyles[el.id] && elementFontStyles[el.id].isItalic);
-      const newItalic = !allItalic;
-      selection.forEach(el => {
-        if (!elementFontStyles[el.id]) {
-          elementFontStyles[el.id] = { fontSize: '12px', isBold: false, isItalic: false };
-        }
-        elementFontStyles[el.id].isItalic = newItalic;
-      });
-      btnFontItalic.classList.toggle('active', newItalic);
-      applyAllElementFontStyles();
-      showToast(`Itálico ${newItalic ? 'ativado' : 'desativado'} em ${selection.length} elemento(s).`);
+      const newItalic = !selection.every(el => fontOfElement(el).isItalic);
+      try {
+        const count = applyFontChange(selection, font => ({ size: font.size, isBold: font.isBold, isItalic: newItalic }));
+        showToast(`Itálico ${newItalic ? 'ativado' : 'desativado'} em ${count} elemento(s).`);
+      } catch (err) {
+        showError('Erro ao alterar a fonte: ' + err.message);
+      }
     }
 
     // Desfazer / Refazer
@@ -1725,6 +2234,7 @@
       if (files && files.length > 0) {
         const file = files[0];
         if (file.name.endsWith('.bpmn') || file.name.endsWith('.xml')) {
+          if (!confirmDiscardIfDirty('Você possui alterações não salvas. Deseja descartá-las para abrir o arquivo solto?')) return;
           const text = await file.text();
           loadXML(text, file.name, null);
         } else {
@@ -1744,28 +2254,39 @@
       }, { passive: false });
     }
 
-    // Atalhos de teclado (Ctrl+O, Ctrl+S, Ctrl+Z, Ctrl+Y, Ctrl+F, Ctrl+B, Ctrl+I)
+    // Atalhos de teclado.
+    // Ctrl+Z, Ctrl+Y/Ctrl+Shift+Z (desfazer/refazer) e Ctrl+F (busca) pertencem ao
+    // `keyboard` do próprio bpmn-js (bindTo: document). NÃO são tratados aqui: um
+    // segundo listener executaria a ação duas vezes, e ainda desfaria o canvas
+    // quando o foco está num campo de texto (o navegador deve desfazer no campo).
+    // Aqui ficam só Ctrl+S, Ctrl+O, Ctrl+B e Ctrl+I, respeitando o foco.
+    function isTextEditingTarget(el) {
+      if (!el || !el.tagName) return false;
+      const tag = el.tagName.toUpperCase();
+      if (tag === 'TEXTAREA') return true;
+      if (tag === 'INPUT') {
+        const type = (el.getAttribute('type') || 'text').toLowerCase();
+        return ['button', 'checkbox', 'radio', 'submit', 'reset', 'file', 'range', 'color', 'image'].indexOf(type) === -1;
+      }
+      return !!el.isContentEditable;
+    }
+
     window.addEventListener('keydown', (e) => {
-      const isCtrlOrMeta = e.ctrlKey || e.metaKey;
-      if (isCtrlOrMeta && e.key.toLowerCase() === 's') {
+      if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.altKey || !e.key) return;
+      const key = e.key.toLowerCase();
+      const editing = isTextEditingTarget(e.target);
+      if (key === 's') {
         e.preventDefault();
+        // Confirma a edição pendente do campo (dispara 'change') antes de salvar.
+        if (editing && propertiesPanel.contains(e.target)) e.target.blur();
         saveFile();
-      } else if (isCtrlOrMeta && e.key.toLowerCase() === 'o') {
+      } else if (key === 'o') {
         e.preventDefault();
         openFile();
-      } else if (isCtrlOrMeta && e.key.toLowerCase() === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        undoAction();
-      } else if (isCtrlOrMeta && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        redoAction();
-      } else if (isCtrlOrMeta && e.key.toLowerCase() === 'f') {
-        e.preventDefault();
-        toggleSearch();
-      } else if (isCtrlOrMeta && e.key.toLowerCase() === 'b') {
+      } else if (key === 'b' && !editing) {
         e.preventDefault();
         toggleBold();
-      } else if (isCtrlOrMeta && e.key.toLowerCase() === 'i') {
+      } else if (key === 'i' && !editing) {
         e.preventDefault();
         toggleItalic();
       }
@@ -1775,7 +2296,33 @@
     const urlParams = new URLSearchParams(window.location.search);
     const fileParam = urlParams.get('file');
 
+    // Diagrama do projeto: o arquivo em DISCO vem antes do snapshot embutido no HTML
+    // (que fica velho quando o .bpmn é regenerado). O snapshot só entra quando o
+    // disco não pode ser lido (ex.: file://), e então o usuário é avisado.
+    async function loadProjectDiagram() {
+      const url = encodeURI(DEFAULT_DIAGRAM_NAME);
+      const disk = await fetchDiskText(url);
+      if (disk !== null) {
+        await loadXML(disk, DEFAULT_DIAGRAM_NAME, null, { fromDisk: true, url: url });
+        if (normalizeXmlText(disk) !== normalizeXmlText(DEFAULT_DIAGRAM_XML)) {
+          showNotice('snapshot-stale',
+            `O arquivo '${DEFAULT_DIAGRAM_NAME}' em disco é diferente do snapshot embutido neste editor ` +
+            '(provavelmente mais novo). Foi carregada a versão do disco.');
+        }
+        return;
+      }
+      await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
+      showNotice('snapshot-only',
+        `Não foi possível ler '${DEFAULT_DIAGRAM_NAME}' do disco; foi carregado o snapshot embutido neste editor, ` +
+        'que pode estar desatualizado. Use "Abrir" para escolher o arquivo do projeto antes de editar e salvar.');
+    }
+
     async function initEditor() {
+      await loadInitialDiagram();
+      offerDraftRecovery();
+    }
+
+    async function loadInitialDiagram() {
       applyDiagramFont();
 
       let baseParam = fileParam;
@@ -1793,7 +2340,7 @@
 
         // Se o arquivo solicitado corresponder ao diagrama padrão embutido (por nome exato ou nome base)
         if (DEFAULT_DIAGRAM_NAME && (fileParam === DEFAULT_DIAGRAM_NAME || baseParam === DEFAULT_DIAGRAM_NAME) && DEFAULT_DIAGRAM_XML) {
-          await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
+          await loadProjectDiagram();
           return;
         }
 
@@ -1806,10 +2353,10 @@
 
         // Tenta fetch local (funciona se servido via http/https ou servidor dev)
         try {
-          const res = await fetch(fileParam);
+          const res = await fetch(fileParam, { cache: 'no-store' });
           if (res.ok) {
             const xml = await res.text();
-            await loadXML(xml, currentFileName, null);
+            await loadXML(xml, currentFileName, null, { fromDisk: true, url: fileParam });
             return;
           }
         } catch (e) {
@@ -1818,7 +2365,7 @@
 
         // Se há diagrama padrão embutido neste editor do projeto, carrega-o para a tela não ficar em branco
         if (DEFAULT_DIAGRAM_NAME && DEFAULT_DIAGRAM_XML) {
-          await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
+          await loadProjectDiagram();
           showToast(`Carregado diagrama padrão '${DEFAULT_DIAGRAM_NAME}'.`);
           return;
         }
@@ -1831,7 +2378,7 @@
 
       // 2. Se não foi passado ?file=, mas há um diagrama padrão configurado (editor copiado no projeto)
       if (DEFAULT_DIAGRAM_NAME && DEFAULT_DIAGRAM_XML) {
-        await loadXML(DEFAULT_DIAGRAM_XML, DEFAULT_DIAGRAM_NAME, null);
+        await loadProjectDiagram();
         return;
       }
 
