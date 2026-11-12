@@ -56,3 +56,7 @@ O editor vive em `scripts/generate_editor_html.py` (f-string Python; JS com chav
 ## Criterio de aceite global
 
 Todos os itens F2.1-F2.15 e G1 implementados e cobertos por teste; sem regressao da Fase 1; testes verdes. (O teste de usabilidade com pessoas descrito no plano esta fora do escopo automatizavel e deve ser apenas mencionado como pendente.)
+
+## Nota da rodada 2b
+
+O codigo da iteracao anterior (commit feat(editor): fase 2) ja existe na branch e a suite (410 testes, ~70 s) passa. Esta rodada deve VERIFICAR cada item F2.1-F2.15 e G1 contra os criterios acima, corrigir lacunas e defeitos encontrados (ex.: toast sobrepondo o minimapa; modo vendorizado nao exercitado; campo de responsavel so para alguns tipos de tarefa) e registrar o que continuar pendente. Nao reescrever o que ja atende.
