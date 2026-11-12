@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "criteria": {
+    "functionality": {
+      "max": 40,
+      "desc": "contratos, comportamento, casos de borda"
+    },
+    "fidelity": {
+      "max": 40,
+      "desc": "aderencia a referencia (visual para UI; API/saida para backend)"
+    },
+    "quality": {
+      "max": 20,
+      "desc": "legibilidade, resiliencia, tratamento de erro"
+    }
+  }
+}
