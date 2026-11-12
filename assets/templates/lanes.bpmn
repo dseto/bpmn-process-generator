@@ -1,0 +1,83 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_ComRaias" targetNamespace="http://bpmn.io/schema/bpmn" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <bpmn:process id="Process_ComRaias" isExecutable="false" name="Processo com raias">
+    <bpmn:laneSet id="LaneSet_ComRaias">
+      <bpmn:lane id="Lane_Solicitante" name="Solicitante">
+        <bpmn:flowNodeRef>Start_NecessidadeIdentificada</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_AbrirSolicitacao</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_SolicitacaoAtendida</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Atendente" name="Atendente">
+        <bpmn:flowNodeRef>Task_TratarSolicitacao</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ResponderSolicitante</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+    <bpmn:startEvent id="Start_NecessidadeIdentificada" name="Necessidade identificada">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="Task_AbrirSolicitacao" name="Abrir solicitação">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_TratarSolicitacao" name="Tratar solicitação">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_ResponderSolicitante" name="Responder solicitante">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:endEvent id="End_SolicitacaoAtendida" name="Solicitação atendida">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_NecessidadeIdentificada" targetRef="Task_AbrirSolicitacao" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_AbrirSolicitacao" targetRef="Task_TratarSolicitacao" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_TratarSolicitacao" targetRef="Task_ResponderSolicitante" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_ResponderSolicitante" targetRef="End_SolicitacaoAtendida" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_ComRaias">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_ComRaias" bpmnElement="Process_ComRaias">
+      <bpmndi:BPMNShape id="Lane_Solicitante_di" bpmnElement="Lane_Solicitante" isHorizontal="true">
+        <omgdc:Bounds x="0" y="60" width="950" height="360" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Lane_Atendente_di" bpmnElement="Lane_Atendente" isHorizontal="true">
+        <omgdc:Bounds x="0" y="420" width="950" height="360" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Start_NecessidadeIdentificada_di" bpmnElement="Start_NecessidadeIdentificada">
+        <omgdc:Bounds x="160" y="222" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_AbrirSolicitacao_di" bpmnElement="Task_AbrirSolicitacao">
+        <omgdc:Bounds x="310" y="200" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_TratarSolicitacao_di" bpmnElement="Task_TratarSolicitacao">
+        <omgdc:Bounds x="460" y="560" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ResponderSolicitante_di" bpmnElement="Task_ResponderSolicitante">
+        <omgdc:Bounds x="610" y="560" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_SolicitacaoAtendida_di" bpmnElement="End_SolicitacaoAtendida">
+        <omgdc:Bounds x="760" y="222" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <omgdi:waypoint x="196" y="240" />
+        <omgdi:waypoint x="310" y="240" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <omgdi:waypoint x="410" y="240" />
+        <omgdi:waypoint x="435" y="240" />
+        <omgdi:waypoint x="435" y="600" />
+        <omgdi:waypoint x="460" y="600" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <omgdi:waypoint x="560" y="600" />
+        <omgdi:waypoint x="610" y="600" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <omgdi:waypoint x="710" y="600" />
+        <omgdi:waypoint x="735" y="600" />
+        <omgdi:waypoint x="735" y="240" />
+        <omgdi:waypoint x="760" y="240" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

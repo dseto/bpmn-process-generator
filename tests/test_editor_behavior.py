@@ -570,6 +570,7 @@ def test_opening_another_file_with_unsaved_changes_asks_first(page):
         dialog.dismiss()
 
     page.once("dialog", decline)
+    page.click("#menu-file-trigger")  # "Abrir" lives in the Arquivo menu since Fase 2
     page.click("#btn-open")
     wait_until(page, lambda: seen)
     assert "não salvas" in seen[0]

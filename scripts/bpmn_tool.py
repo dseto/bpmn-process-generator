@@ -26,6 +26,7 @@ Both subcommands share the same tag list and graph-building logic
 a flow node.
 """
 import argparse
+import copy
 import hashlib
 import json
 from pathlib import Path
@@ -545,17 +546,67 @@ def copy_editor_if_needed(target_dir, bpmn_path=None, force=False):
     return target_editor
 
 
+def capture_label_styles(root):
+    """
+    Read the per-element font styles out of the existing DI before it is discarded.
+
+    The editor stores a font as `<bpmndi:BPMNLabel labelStyle="X"/>` inside the
+    element's shape/edge plus a `<bpmndi:BPMNLabelStyle id="X"><dc:Font .../>` at
+    diagram level. A relayout recomputes the whole BPMNDiagram, which would drop
+    them; this returns ({style id: BPMNLabelStyle element}, {bpmnElement id: style id})
+    so `restore_label_styles` can put them back on the fresh DI.
+    """
+    styles = {}
+    by_element = {}
+    for diagram in root.findall(f"{{{BPMNDI_NS}}}BPMNDiagram"):
+        for style in diagram.findall(f"{{{BPMNDI_NS}}}BPMNLabelStyle"):
+            if style.get("id"):
+                styles[style.get("id")] = copy.deepcopy(style)
+        for node in diagram.iter():
+            if node.tag not in (f"{{{BPMNDI_NS}}}BPMNShape", f"{{{BPMNDI_NS}}}BPMNEdge"):
+                continue
+            label = node.find(f"{{{BPMNDI_NS}}}BPMNLabel")
+            ref = node.get("bpmnElement")
+            if label is not None and ref and label.get("labelStyle") in styles:
+                by_element[ref] = label.get("labelStyle")
+    return styles, by_element
+
+
+def restore_label_styles(diagram, styles, by_element):
+    """Re-attach the captured font styles to the shapes/edges of a freshly computed diagram."""
+    used = []
+    for node in diagram.iter():
+        if node.tag not in (f"{{{BPMNDI_NS}}}BPMNShape", f"{{{BPMNDI_NS}}}BPMNEdge"):
+            continue
+        style_id = by_element.get(node.get("bpmnElement"))
+        if not style_id or node.find(f"{{{BPMNDI_NS}}}BPMNLabel") is not None:
+            continue
+        ET.SubElement(node, f"{{{BPMNDI_NS}}}BPMNLabel", {"labelStyle": style_id})
+        if style_id not in used:
+            used.append(style_id)
+    for style_id in used:
+        diagram.append(copy.deepcopy(styles[style_id]))
+
+
+def _relayout(root, processes):
+    """Replace every BPMNDiagram with a computed one, keeping the font styles."""
+    styles, by_element = capture_label_styles(root)
+    for diagram in root.findall(f"{{{BPMNDI_NS}}}BPMNDiagram"):
+        root.remove(diagram)
+    for process_el in processes:
+        diagram = compute_diagram(process_el)
+        restore_label_styles(diagram, styles, by_element)
+        root.append(diagram)
+
+
 def run_layout(input_path, output_path=None, copy_editor=True):
     tree = _parse_or_die(input_path)
     root = tree.getroot()
-    for diagram in root.findall(f"{{{BPMNDI_NS}}}BPMNDiagram"):
-        root.remove(diagram)
     processes = _process_elements(root)
     if not processes:
         print("[FAIL] No <bpmn:process> element found in the input file.", file=sys.stderr)
         sys.exit(1)
-    for process_el in processes:
-        root.append(compute_diagram(process_el))
+    _relayout(root, processes)
     out_path = output_path or input_path
     out_file = Path(out_path).resolve()
     out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -989,10 +1040,7 @@ def run_fix(input_path, output_path=None, dry_run=False):
                    if f.rule in ("missing-diagram", "missing-plane", "missing-shape",
                                   "missing-edge", "edge-waypoints")]
     if di_findings:
-        for diagram in root.findall(f"{{{BPMNDI_NS}}}BPMNDiagram"):
-            root.remove(diagram)
-        for process_el in _process_elements(root):
-            root.append(compute_diagram(process_el))
+        _relayout(root, _process_elements(root))
         changes.append(f"layout: recomputed the BPMNDiagram ({len(di_findings)} DI finding(s) "
                         f"including {di_findings[0].rule})")
 

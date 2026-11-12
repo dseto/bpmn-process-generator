@@ -1,0 +1,87 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" id="Definitions_ComLaco" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_ComLaco" isExecutable="false" name="Processo com laço de revisão">
+    <bpmn:startEvent id="Start_DocumentoSolicitado" name="Documento solicitado">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:exclusiveGateway id="Gateway_PrimeiraVersaoOuCorrecao" name="Primeira versão ou correção">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+      <bpmn:incoming>Flow_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="Task_ElaborarOuCorrigirDocumento" name="Elaborar ou corrigir documento">
+      <bpmn:incoming>Flow_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_3</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:userTask id="Task_RevisarDocumento" name="Revisar documento">
+      <bpmn:incoming>Flow_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_4</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_DocumentoAprovado" name="Documento aprovado?" default="Flow_6">
+      <bpmn:incoming>Flow_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_5</bpmn:outgoing>
+      <bpmn:outgoing>Flow_6</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="End_DocumentoPublicado" name="Documento publicado">
+      <bpmn:incoming>Flow_5</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="Start_DocumentoSolicitado" targetRef="Gateway_PrimeiraVersaoOuCorrecao" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Gateway_PrimeiraVersaoOuCorrecao" targetRef="Task_ElaborarOuCorrigirDocumento" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_ElaborarOuCorrigirDocumento" targetRef="Task_RevisarDocumento" />
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_RevisarDocumento" targetRef="Gateway_DocumentoAprovado" />
+    <bpmn:sequenceFlow id="Flow_5" name="Sim" sourceRef="Gateway_DocumentoAprovado" targetRef="End_DocumentoPublicado">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">documentoAprovado == true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_6" name="Não" sourceRef="Gateway_DocumentoAprovado" targetRef="Gateway_PrimeiraVersaoOuCorrecao" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Process_ComLaco">
+    <bpmndi:BPMNPlane id="BPMNPlane_Process_ComLaco" bpmnElement="Process_ComLaco">
+      <bpmndi:BPMNShape id="Start_DocumentoSolicitado_di" bpmnElement="Start_DocumentoSolicitado">
+        <omgdc:Bounds x="160" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_PrimeiraVersaoOuCorrecao_di" bpmnElement="Gateway_PrimeiraVersaoOuCorrecao">
+        <omgdc:Bounds x="310" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_ElaborarOuCorrigirDocumento_di" bpmnElement="Task_ElaborarOuCorrigirDocumento">
+        <omgdc:Bounds x="460" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_RevisarDocumento_di" bpmnElement="Task_RevisarDocumento">
+        <omgdc:Bounds x="610" y="80" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_DocumentoAprovado_di" bpmnElement="Gateway_DocumentoAprovado">
+        <omgdc:Bounds x="760" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="End_DocumentoPublicado_di" bpmnElement="End_DocumentoPublicado">
+        <omgdc:Bounds x="910" y="42" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <omgdi:waypoint x="196" y="120" />
+        <omgdi:waypoint x="310" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_2_di" bpmnElement="Flow_2">
+        <omgdi:waypoint x="360" y="120" />
+        <omgdi:waypoint x="460" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_3_di" bpmnElement="Flow_3">
+        <omgdi:waypoint x="560" y="120" />
+        <omgdi:waypoint x="610" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_4_di" bpmnElement="Flow_4">
+        <omgdi:waypoint x="710" y="120" />
+        <omgdi:waypoint x="760" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_5_di" bpmnElement="Flow_5">
+        <omgdi:waypoint x="810" y="120" />
+        <omgdi:waypoint x="860" y="120" />
+        <omgdi:waypoint x="860" y="60" />
+        <omgdi:waypoint x="910" y="60" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_6_di" bpmnElement="Flow_6">
+        <omgdi:waypoint x="785" y="145" />
+        <omgdi:waypoint x="785" y="205" />
+        <omgdi:waypoint x="335" y="205" />
+        <omgdi:waypoint x="335" y="145" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

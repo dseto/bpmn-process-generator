@@ -36,7 +36,7 @@ CDN_BASE = "https://unpkg.com/bpmn-js@17.0.0/dist"
 # changes: `bpmn_tool.copy_editor_if_needed` compares it against the copy already
 # in the project and refreshes an older, untouched one (an edited copy is kept
 # and reported instead -- see `was_edited_locally`).
-EDITOR_VERSION = "1.2.0"
+EDITOR_VERSION = "1.3.1"
 
 PRESET_FILES = {
     "06-bus-boarding-process.bpmn": ROOT_DIR / "tests" / "06-bus-boarding-process.bpmn",
@@ -76,6 +76,260 @@ for name, path in PRESET_FILES.items():
         print(f"[WARN] Preset file not found: {path}")
 
 presets_json = json.dumps(presets_data, ensure_ascii=False)
+
+
+# ---------------------------------------------------------------------------
+# Modelos prontos (F2.14). Saem do MESMO pipeline que `bpmn_build.py` usa
+# (spec -> XML -> layout), portanto passam no validador por construção.
+# ---------------------------------------------------------------------------
+TEMPLATE_SPECS = {
+    "linear": {
+        "id": "Process_Linear",
+        "name": "Processo linear",
+        "nodes": [
+            {"id": "inicio", "type": "start", "name": "Demanda recebida"},
+            {"id": "etapa1", "type": "userTask", "name": "Registrar demanda"},
+            {"id": "etapa2", "type": "userTask", "name": "Executar demanda"},
+            {"id": "etapa3", "type": "userTask", "name": "Entregar resultado"},
+            {"id": "fim", "type": "end", "name": "Demanda concluída"},
+        ],
+        "flows": [
+            {"from": "inicio", "to": "etapa1"},
+            {"from": "etapa1", "to": "etapa2"},
+            {"from": "etapa2", "to": "etapa3"},
+            {"from": "etapa3", "to": "fim"},
+        ],
+    },
+    "decision": {
+        "id": "Process_ComDecisao",
+        "name": "Processo com decisão",
+        "nodes": [
+            {"id": "inicio", "type": "start", "name": "Pedido recebido"},
+            {"id": "analisar", "type": "userTask", "name": "Analisar pedido"},
+            {"id": "aprovado", "type": "xor", "name": "Pedido aprovado?"},
+            {"id": "atender", "type": "userTask", "name": "Atender pedido"},
+            {"id": "recusar", "type": "userTask", "name": "Informar recusa"},
+            {"id": "fim", "type": "end", "name": "Pedido encerrado"},
+        ],
+        "flows": [
+            {"from": "inicio", "to": "analisar"},
+            {"from": "analisar", "to": "aprovado"},
+            {"from": "aprovado", "to": "atender", "label": "Sim", "condition": "pedidoAprovado == true"},
+            {"from": "aprovado", "to": "recusar", "label": "Não", "default": True},
+            {"from": "atender", "to": "fim"},
+            {"from": "recusar", "to": "fim"},
+        ],
+    },
+    "lanes": {
+        "id": "Process_ComRaias",
+        "name": "Processo com raias",
+        "lanes": [
+            {"id": "solicitante", "name": "Solicitante"},
+            {"id": "atendente", "name": "Atendente"},
+        ],
+        "nodes": [
+            {"id": "inicio", "type": "start", "name": "Necessidade identificada", "lane": "solicitante"},
+            {"id": "solicitar", "type": "userTask", "name": "Abrir solicitação", "lane": "solicitante"},
+            {"id": "tratar", "type": "userTask", "name": "Tratar solicitação", "lane": "atendente"},
+            {"id": "responder", "type": "userTask", "name": "Responder solicitante", "lane": "atendente"},
+            {"id": "fim", "type": "end", "name": "Solicitação atendida", "lane": "solicitante"},
+        ],
+        "flows": [
+            {"from": "inicio", "to": "solicitar"},
+            {"from": "solicitar", "to": "tratar"},
+            {"from": "tratar", "to": "responder"},
+            {"from": "responder", "to": "fim"},
+        ],
+    },
+    "loop": {
+        "id": "Process_ComLaco",
+        "name": "Processo com laço de revisão",
+        "nodes": [
+            {"id": "inicio", "type": "start", "name": "Documento solicitado"},
+            {"id": "entrada", "type": "xor", "name": "Primeira versão ou correção"},
+            {"id": "elaborar", "type": "userTask", "name": "Elaborar ou corrigir documento"},
+            {"id": "revisar", "type": "userTask", "name": "Revisar documento"},
+            {"id": "aprovado", "type": "xor", "name": "Documento aprovado?"},
+            {"id": "fim", "type": "end", "name": "Documento publicado"},
+        ],
+        "flows": [
+            {"from": "inicio", "to": "entrada"},
+            {"from": "entrada", "to": "elaborar"},
+            {"from": "elaborar", "to": "revisar"},
+            {"from": "revisar", "to": "aprovado"},
+            {"from": "aprovado", "to": "fim", "label": "Sim", "condition": "documentoAprovado == true"},
+            {"from": "aprovado", "to": "entrada", "label": "Não", "default": True},
+        ],
+    },
+}
+
+
+def build_template_xml(spec):
+    """Spec -> laid-out BPMN XML, using exactly the pipeline of `bpmn_build.run_build`."""
+    from xml.etree import ElementTree as ET
+
+    import bpmn_build
+    from bpmn_tool import BPMN_NS, compute_diagram
+
+    tree = bpmn_build.build_tree(spec)
+    root = tree.getroot()
+    for process in root.findall(f"{{{BPMN_NS}}}process"):
+        root.append(compute_diagram(process))
+    ET.indent(tree, space="  ")
+    return bpmn_build._serialise(tree)
+
+
+# ---------------------------------------------------------------------------
+# Tradução pt-BR dos rótulos do bpmn-js (F2.6). As chaves são os textos em inglês
+# que o bpmn-js 17 passa para `translate`; o que não estiver aqui cai no original.
+# ---------------------------------------------------------------------------
+PT_BR_TRANSLATIONS = {
+    # Paleta
+    "Activate hand tool": "Ativar ferramenta de mão",
+    "Activate lasso tool": "Ativar ferramenta de laço (seleção em área)",
+    "Activate create/remove space tool": "Ativar ferramenta de criar/remover espaço",
+    "Activate global connect tool": "Ativar ferramenta de conexão global",
+    "Create start event": "Criar evento de início",
+    "Create intermediate/boundary event": "Criar evento intermediário/de borda",
+    "Create end event": "Criar evento de fim",
+    "Create gateway": "Criar gateway (decisão)",
+    "Create task": "Criar tarefa",
+    "Create data object reference": "Criar objeto de dados",
+    "Create data store reference": "Criar repositório de dados",
+    "Create expanded sub-process": "Criar subprocesso expandido",
+    "Create pool/participant": "Criar piscina/participante",
+    "Create group": "Criar grupo",
+    # Context pad
+    "Append task": "Adicionar tarefa",
+    "Append end event": "Adicionar evento de fim",
+    "Append gateway": "Adicionar gateway",
+    "Append intermediate/boundary event": "Adicionar evento intermediário/de borda",
+    "Append receive task": "Adicionar tarefa de recebimento",
+    "Append message intermediate catch event": "Adicionar evento intermediário de mensagem",
+    "Append timer intermediate catch event": "Adicionar evento intermediário de tempo",
+    "Append conditional intermediate catch event": "Adicionar evento intermediário condicional",
+    "Append signal intermediate catch event": "Adicionar evento intermediário de sinal",
+    "Append compensation activity": "Adicionar atividade de compensação",
+    "Add text annotation": "Adicionar anotação de texto",
+    "Add lane above": "Adicionar raia acima",
+    "Add lane below": "Adicionar raia abaixo",
+    "Divide into two lanes": "Dividir em duas raias",
+    "Divide into three lanes": "Dividir em três raias",
+    "Change element": "Trocar tipo do elemento",
+    "Connect to other element": "Conectar a outro elemento",
+    "Connect using association": "Conectar com associação",
+    "Connect using data input association": "Conectar com associação de dados de entrada",
+    "Delete": "Excluir",
+    "Remove": "Remover",
+    "Distribute elements horizontally": "Distribuir elementos na horizontal",
+    "Distribute elements vertically": "Distribuir elementos na vertical",
+    "Toggle non-interrupting": "Alternar não interruptivo",
+    "Loop": "Laço",
+    "Parallel multi-instance": "Múltiplas instâncias em paralelo",
+    "Sequential multi-instance": "Múltiplas instâncias em sequência",
+    "Ad-hoc": "Ad-hoc",
+    "Collection": "Coleção",
+    "Participant multiplicity": "Multiplicidade do participante",
+    # Menu de troca de tipo (replace)
+    "Start event": "Evento de início",
+    "Intermediate throw event": "Evento intermediário de lançamento",
+    "End event": "Evento de fim",
+    "Task": "Tarefa",
+    "User task": "Tarefa de usuário",
+    "Service task": "Tarefa de serviço",
+    "Send task": "Tarefa de envio",
+    "Receive task": "Tarefa de recebimento",
+    "Manual task": "Tarefa manual",
+    "Business rule task": "Tarefa de regra de negócio",
+    "Script task": "Tarefa de script",
+    "Call activity": "Atividade de chamada",
+    "Sub-process (collapsed)": "Subprocesso (recolhido)",
+    "Sub-process (expanded)": "Subprocesso (expandido)",
+    "Sub-process": "Subprocesso",
+    "Event sub-process": "Subprocesso de evento",
+    "Transaction": "Transação",
+    "Exclusive gateway": "Gateway exclusivo (XOR)",
+    "Parallel gateway": "Gateway paralelo (AND)",
+    "Inclusive gateway": "Gateway inclusivo (OR)",
+    "Complex gateway": "Gateway complexo",
+    "Event-based gateway": "Gateway baseado em evento",
+    "Message start event": "Evento de início por mensagem",
+    "Timer start event": "Evento de início por tempo",
+    "Conditional start event": "Evento de início condicional",
+    "Signal start event": "Evento de início por sinal",
+    "Error start event": "Evento de início por erro",
+    "Escalation start event": "Evento de início por escalonamento",
+    "Compensation start event": "Evento de início por compensação",
+    "Message start event (non-interrupting)": "Evento de início por mensagem (não interruptivo)",
+    "Timer start event (non-interrupting)": "Evento de início por tempo (não interruptivo)",
+    "Conditional start event (non-interrupting)": "Evento de início condicional (não interruptivo)",
+    "Signal start event (non-interrupting)": "Evento de início por sinal (não interruptivo)",
+    "Escalation start event (non-interrupting)": "Evento de início por escalonamento (não interruptivo)",
+    "Message intermediate catch event": "Evento intermediário de captura de mensagem",
+    "Message intermediate throw event": "Evento intermediário de envio de mensagem",
+    "Timer intermediate catch event": "Evento intermediário de tempo",
+    "Escalation intermediate throw event": "Evento intermediário de escalonamento",
+    "Conditional intermediate catch event": "Evento intermediário condicional",
+    "Link intermediate catch event": "Evento intermediário de captura de link",
+    "Link intermediate throw event": "Evento intermediário de lançamento de link",
+    "Compensation intermediate throw event": "Evento intermediário de compensação",
+    "Signal intermediate catch event": "Evento intermediário de captura de sinal",
+    "Signal intermediate throw event": "Evento intermediário de lançamento de sinal",
+    "Message end event": "Evento de fim por mensagem",
+    "Escalation end event": "Evento de fim por escalonamento",
+    "Error end event": "Evento de fim por erro",
+    "Cancel end event": "Evento de fim por cancelamento",
+    "Compensation end event": "Evento de fim por compensação",
+    "Signal end event": "Evento de fim por sinal",
+    "Terminate end event": "Evento de fim com término",
+    "Message boundary event": "Evento de borda de mensagem",
+    "Message boundary event (non-interrupting)": "Evento de borda de mensagem (não interruptivo)",
+    "Timer boundary event": "Evento de borda de tempo",
+    "Timer boundary event (non-interrupting)": "Evento de borda de tempo (não interruptivo)",
+    "Escalation boundary event": "Evento de borda de escalonamento",
+    "Escalation boundary event (non-interrupting)": "Evento de borda de escalonamento (não interruptivo)",
+    "Conditional boundary event": "Evento de borda condicional",
+    "Conditional boundary event (non-interrupting)": "Evento de borda condicional (não interruptivo)",
+    "Error boundary event": "Evento de borda de erro",
+    "Cancel boundary event": "Evento de borda de cancelamento",
+    "Signal boundary event": "Evento de borda de sinal",
+    "Signal boundary event (non-interrupting)": "Evento de borda de sinal (não interruptivo)",
+    "Compensation boundary event": "Evento de borda de compensação",
+    "Data object reference": "Objeto de dados",
+    "Data store reference": "Repositório de dados",
+    "Expanded pool/participant": "Piscina/participante expandido",
+    "Default flow": "Fluxo padrão",
+    "Conditional flow": "Fluxo condicional",
+    "Sequence flow": "Fluxo de sequência",
+    # Busca
+    "Search in diagram": "Buscar no diagrama",
+}
+
+pt_br_json = json.dumps(PT_BR_TRANSLATIONS, ensure_ascii=False)
+
+
+TEMPLATES_DIR = ROOT_DIR / "assets" / "templates"
+
+
+def rebuild_templates():
+    """Regenerate assets/templates/*.bpmn from TEMPLATE_SPECS.
+
+    The files are committed (not rebuilt on every render) because the layout engine
+    is not guaranteed to produce byte-identical coordinates between runs, and
+    editor.html must be a stable build output of this generator.
+    """
+    TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+    for key, spec in TEMPLATE_SPECS.items():
+        (TEMPLATES_DIR / f"{key}.bpmn").write_text(build_template_xml(spec), encoding="utf-8")
+
+
+templates_data = {"_blank": BLANK_TEMPLATE}
+for _key, _spec in TEMPLATE_SPECS.items():
+    _path = TEMPLATES_DIR / f"{_key}.bpmn"
+    if not _path.exists():
+        rebuild_templates()
+    templates_data[_key] = _path.read_text(encoding="utf-8")
+templates_json = json.dumps(templates_data, ensure_ascii=False)
 
 
 def _embed_font(css, vendor_dir):
@@ -374,6 +628,14 @@ def render_editor_html(vendor_dir=None):
     width: 100%;
   }}
 
+  #canvas-area {{
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    display: flex;
+  }}
+
   #canvas {{
     flex: 1 1 auto;
     min-width: 0;
@@ -509,11 +771,15 @@ def render_editor_html(vendor_dir=None):
     }}
     #app-header,
     #properties-panel,
+    #context-toolbar,
+    #minimap,
+    #status-footer,
+    .dialog-backdrop,
     #toast,
     #drop-overlay {{
       display: none !important;
     }}
-    #workspace, #canvas {{
+    #workspace, #canvas-area, #canvas {{
       width: 100%;
       height: auto;
     }}
@@ -615,12 +881,251 @@ def render_editor_html(vendor_dir=None):
     z-index: 3000;
     opacity: 0;
     transform: translateY(10px);
-    transition: all 0.2s ease-in-out;
+    /* só opacidade/transform: animar `bottom` faria o aviso "voar" sobre o minimapa */
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
     pointer-events: none;
   }}
   #toast.show {{
     opacity: 1;
     transform: translateY(0);
+  }}
+
+  /* ------------------------------------------------------------------ */
+  /* Fase 2: menus, barra contextual, rodapé, diálogos, minimapa          */
+  /* ------------------------------------------------------------------ */
+  [hidden] {{ display: none !important; }}
+
+  /* O cabeçalho quebra em linhas (F2.5) em vez de rolar: com overflow ele cortaria os menus. */
+  #app-header {{ overflow: visible; }}
+
+  button:focus-visible, select:focus-visible, input:focus-visible,
+  textarea:focus-visible, [tabindex]:focus-visible {{
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+  }}
+
+  .menubar {{
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }}
+  .menu {{
+    position: relative;
+  }}
+  .menu-trigger {{
+    background: transparent;
+    border-color: transparent;
+    font-size: 13px;
+    padding: 5px 10px;
+  }}
+  .menu-trigger[aria-expanded="true"] {{
+    background: var(--btn-secondary-hover);
+  }}
+  .menu-list {{
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px;
+    background: #1e293b;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+    z-index: 1000;
+  }}
+  .menu-list > button {{
+    background: transparent;
+    border-color: transparent;
+    justify-content: flex-start;
+    font-size: 13px;
+    padding: 7px 10px;
+    width: 100%;
+    text-align: left;
+  }}
+  .menu-list > button:hover, .menu-list > button:focus-visible {{
+    background: var(--btn-primary);
+  }}
+  .menu-list .kbd {{
+    margin-left: auto;
+    padding-left: 18px;
+    font-size: 11px;
+    color: #cbd5e1;
+  }}
+  .menu-sep {{
+    height: 1px;
+    background: rgba(255,255,255,0.12);
+    margin: 3px 2px;
+  }}
+  .menu-row {{
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 4px 10px 6px;
+    font-size: 12px;
+    color: #cbd5e1;
+  }}
+  #preset-select {{
+    max-width: 100%;
+    width: 100%;
+  }}
+
+  button.color-dot {{
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    padding: 0;
+    border-radius: 50%;
+    display: inline-block;
+  }}
+  button.color-dot[aria-pressed="true"] {{
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px #2563eb;
+  }}
+
+  #context-toolbar {{
+    position: absolute;
+    top: 8px;
+    left: 120px;
+    max-width: calc(100% - 132px);
+    z-index: 60;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 8px;
+    padding: 4px 8px;
+    background: var(--bg-header);
+    color: var(--text-light);
+    border: 1px solid #334155;
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.35);
+  }}
+  .ctx-group {{
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }}
+  .ctx-group + .ctx-group:not([hidden]) {{
+    border-left: 1px solid rgba(255,255,255,0.15);
+    padding-left: 8px;
+  }}
+  #context-toolbar button:not(.color-dot) {{
+    min-width: 28px;
+    justify-content: center;
+    font-size: 14px;
+  }}
+  #context-toolbar .btn-font-toggle {{
+    font-size: 12px;
+  }}
+
+  #status-footer {{
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 3px 12px;
+    background: var(--bg-header);
+    border-top: 1px solid var(--bg-header-border);
+    color: #cbd5e1;
+    font-size: 12px;
+  }}
+  .footer-spacer {{ flex: 1 1 auto; }}
+  #zoom-percent {{
+    min-width: 44px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-light);
+  }}
+  #status-footer button {{
+    padding: 2px 8px;
+  }}
+
+  #minimap {{
+    position: absolute;
+    right: 12px;
+    /* acima da marca "bpmn.io" (canto inferior direito), que deve ficar visível */
+    bottom: 60px;
+    width: 200px;
+    height: 130px;
+    z-index: 50;
+    background: rgba(248,250,252,0.94);
+    border: 1px solid #94a3b8;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(15,23,42,0.25);
+    overflow: hidden;
+    cursor: pointer;
+  }}
+  #minimap svg {{
+    width: 100%;
+    height: 100%;
+    display: block;
+  }}
+
+  .dialog-backdrop {{
+    position: fixed;
+    inset: 0;
+    background: rgba(15,23,42,0.6);
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }}
+  .dialog {{
+    background: #ffffff;
+    color: #0f172a;
+    border-radius: 12px;
+    padding: 20px 24px;
+    max-width: min(640px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+  }}
+  .dialog h2 {{ margin: 0 0 12px; font-size: 18px; }}
+  .dialog-hint {{ margin: 0 0 12px; color: #475569; font-size: 13px; }}
+  .dialog button {{ background: #e2e8f0; color: #0f172a; border-color: #cbd5e1; }}
+  .dialog button:hover {{ background: #cbd5e1; }}
+  .dialog button.btn-primary {{ background: var(--btn-primary); color: #ffffff; }}
+  .shortcuts-table {{ border-collapse: collapse; width: 100%; margin-bottom: 16px; font-size: 13px; }}
+  .shortcuts-table th {{ text-align: left; white-space: nowrap; padding: 5px 16px 5px 0; font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: #1e3a8a; }}
+  .shortcuts-table td {{ padding: 5px 0; }}
+  .shortcuts-table tr + tr {{ border-top: 1px solid #e2e8f0; }}
+  .template-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+  }}
+  .template-card {{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    padding: 12px;
+    white-space: normal;
+    text-align: left;
+    font-size: 12px;
+  }}
+  .template-card strong {{ font-size: 14px; }}
+  .template-card span {{ color: #475569; }}
+
+  .prop-process {{ display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }}
+  .prop-process h3 {{ margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }}
+  .prop-hint {{ margin: 0; }}
+  #prop-body {{ display: flex; flex-direction: column; gap: 14px; }}
+  #prop-body.hidden {{ display: none; }}
+
+  /* Responsivo (F2.5): a barra cabe em, no máximo, duas linhas */
+  @media (max-width: 1100px) {{
+    .btn-label {{ display: none; }}
+    #current-filename {{ max-width: 140px; }}
+  }}
+  @media (max-width: 900px) {{
+    .brand-text {{ display: none; }}
+    #current-filename {{ max-width: 90px; }}
+    #properties-panel {{ flex-basis: 260px; }}
+    #minimap {{ width: 150px; height: 100px; }}
   }}
 </style>
 </head>
@@ -628,151 +1133,82 @@ def render_editor_html(vendor_dir=None):
 
 <header id="app-header">
   <div class="brand" title="BPMN Editor Central — Modelador Visual Interativo">
-    <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-    BPMN Editor
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+    <span class="brand-text">BPMN Editor</span>
   </div>
 
-  <!-- Grupo Arquivo -->
-  <div class="button-group">
-    <button id="btn-open" class="btn-primary" title="Abrir arquivo .bpmn do computador (Ctrl+O)">
-      📂 Abrir
-    </button>
-    <button id="btn-save" class="btn-save" title="Salvar diretamente no arquivo do disco (Ctrl+S)">
-      💾 Salvar
-    </button>
-    <button id="btn-save-as" title="Salvar como novo arquivo ou download">
-      📥 Salvar Como...
-    </button>
-    <button id="btn-new" title="Criar novo diagrama em branco">
-      ➕ Novo
-    </button>
-  </div>
+  <!-- Menus: Arquivo / Editar / Exibir (F2.1) -->
+  <nav id="main-menubar" class="menubar" aria-label="Menus do editor">
+    <div class="menu" data-menu>
+      <button type="button" id="menu-file-trigger" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-file-list">Arquivo</button>
+      <div id="menu-file-list" class="menu-list" role="menu" aria-labelledby="menu-file-trigger" hidden>
+        <button type="button" role="menuitem" id="btn-open" title="Abrir arquivo .bpmn do computador (Ctrl+O)">📂 Abrir… <span class="kbd">Ctrl+O</span></button>
+        <button type="button" role="menuitem" id="menu-save" title="Salvar diretamente no arquivo do disco (Ctrl+S)">💾 Salvar <span class="kbd">Ctrl+S</span></button>
+        <button type="button" role="menuitem" id="btn-save-as" title="Salvar como novo arquivo ou download">📥 Salvar como…</button>
+        <button type="button" role="menuitem" id="btn-new" title="Criar um novo diagrama (em branco ou a partir de um modelo)">➕ Novo diagrama…</button>
+        <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" id="btn-export-svg" title="Exportar imagem vetorial (.svg)">🖼️ Exportar SVG</button>
+        <button type="button" role="menuitem" id="btn-export-png" title="Exportar imagem em alta resolução (.png)">📷 Exportar PNG</button>
+        <button type="button" role="menuitem" id="btn-export-pdf" title="Imprimir o diagrama (escolha &quot;Salvar como PDF&quot;)">🖨️ Exportar PDF</button>
+        <div class="menu-sep" role="separator"></div>
+        <div class="menu-row">
+          <label for="preset-select">Exemplos</label>
+          <!--PRESET_SELECT_START-->
+          <select id="preset-select" title="Carregar um diagrama de teste ou exemplo integrado">
+            <option value="">-- Exemplos / Testes --</option>
+            <option value="06-bus-boarding-process.bpmn">06. Ônibus Completo (4 Raias)</option>
+            <option value="04-incident-management.bpmn">04. Gestão de Incidentes (2 Raias)</option>
+            <option value="03-order-fulfillment.bpmn">03. Atendimento de Pedido (AND Split/Join)</option>
+            <option value="02-credit-card-approval.bpmn">02. Cartão de Crédito (XOR Gateway)</option>
+            <option value="01-user-onboarding.bpmn">01. Onboarding Linear</option>
+            <option value="05-document-revision-cycle.bpmn">05. Revisão de Documentos (Loop)</option>
+            <option value="example-complete.bpmn">Exemplo Referência (Expense Approval)</option>
+          </select>
+          <!--PRESET_SELECT_END-->
+        </div>
+      </div>
+    </div>
+
+    <div class="menu" data-menu>
+      <button type="button" id="menu-edit-trigger" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-edit-list">Editar</button>
+      <div id="menu-edit-list" class="menu-list" role="menu" aria-labelledby="menu-edit-trigger" hidden>
+        <button type="button" role="menuitem" id="menu-undo" title="Desfazer última ação (Ctrl+Z)">↩️ Desfazer <span class="kbd">Ctrl+Z</span></button>
+        <button type="button" role="menuitem" id="menu-redo" title="Refazer ação (Ctrl+Y)">↪️ Refazer <span class="kbd">Ctrl+Y</span></button>
+        <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" id="btn-search" title="Localizar elementos no diagrama (Ctrl+F)">🔍 Buscar no diagrama <span class="kbd">Ctrl+F</span></button>
+        <button type="button" role="menuitem" id="btn-route-90" title="Alinhar conexões selecionadas (ou todas) em ângulos ortogonais de 90°">📐 Curva 90° nas conexões</button>
+      </div>
+    </div>
+
+    <div class="menu" data-menu>
+      <button type="button" id="menu-view-trigger" class="menu-trigger" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-view-list">Exibir</button>
+      <div id="menu-view-list" class="menu-list" role="menu" aria-labelledby="menu-view-trigger" hidden>
+        <button type="button" role="menuitem" id="menu-zoom-in" title="Aumentar zoom">➕ Aumentar zoom</button>
+        <button type="button" role="menuitem" id="menu-zoom-out" title="Diminuir zoom">➖ Diminuir zoom</button>
+        <button type="button" role="menuitem" id="btn-zoom-fit" title="Ajustar o diagrama à tela">🎯 Ajustar à tela</button>
+        <button type="button" role="menuitem" id="btn-zoom-reset" title="Zoom 100% (1:1)">1:1 Zoom 100%</button>
+        <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitemcheckbox" aria-checked="true" id="menu-minimap" title="Mostrar/ocultar o minimapa">🗺️ Minimapa</button>
+        <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" id="menu-shortcuts" title="Lista de atalhos de teclado (?)">⌨️ Atalhos de teclado <span class="kbd">?</span></button>
+      </div>
+    </div>
+  </nav>
 
   <div class="toolbar-sep"></div>
 
-  <!-- Grupo Histórico (Undo / Redo) -->
-  <div class="button-group">
-    <button id="btn-undo" title="Desfazer última ação (Ctrl+Z)" disabled>
-      ↩️
+  <!-- Ações mais usadas -->
+  <div class="button-group" role="toolbar" aria-label="Ações principais">
+    <button type="button" id="btn-save" class="btn-save" aria-label="Salvar" title="Salvar diretamente no arquivo do disco (Ctrl+S)">
+      💾 <span class="btn-label">Salvar</span>
     </button>
-    <button id="btn-redo" title="Refazer ação (Ctrl+Y)" disabled>
-      ↪️
+    <button type="button" id="btn-undo" aria-label="Desfazer" title="Desfazer última ação (Ctrl+Z)" disabled>↩️</button>
+    <button type="button" id="btn-redo" aria-label="Refazer" title="Refazer ação (Ctrl+Y)" disabled>↪️</button>
+    <button type="button" id="btn-zoom-out" aria-label="Diminuir zoom" title="Diminuir zoom">➖</button>
+    <button type="button" id="btn-zoom-in" aria-label="Aumentar zoom" title="Aumentar zoom">➕</button>
+    <button type="button" id="btn-props-toggle" aria-label="Painel de propriedades" aria-pressed="true" title="Mostrar/ocultar o painel de propriedades">
+      🧾 <span class="btn-label">Propriedades</span>
     </button>
-  </div>
-
-  <div class="toolbar-sep"></div>
-
-  <!-- Grupo Geometria & Roteamento -->
-  <div class="button-group">
-    <button id="btn-route-90" class="btn-action" title="Alinhar conexões selecionadas (ou todas) em ângulos ortogonais de 90°">
-      📐 Curva 90°
-    </button>
-  </div>
-
-  <div class="toolbar-sep"></div>
-
-  <!-- Grupo Paleta de Cores -->
-  <div class="color-picker-group" title="Selecione nós ou caixas e clique numa cor para personalizar">
-    <span class="color-label">Cores:</span>
-    <div class="color-dot" style="background:#ffffff;" data-fill="#ffffff" data-stroke="#22242a" title="Padrão (Branco)"></div>
-    <div class="color-dot" style="background:#38bdf8;" data-fill="#e0f2fe" data-stroke="#0284c7" title="Azul"></div>
-    <div class="color-dot" style="background:#4ade80;" data-fill="#dcfce7" data-stroke="#16a34a" title="Verde"></div>
-    <div class="color-dot" style="background:#facc15;" data-fill="#fef9c3" data-stroke="#ca8a04" title="Amarelo"></div>
-    <div class="color-dot" style="background:#f87171;" data-fill="#fee2e2" data-stroke="#dc2626" title="Vermelho"></div>
-    <div class="color-dot" style="background:#c084fc;" data-fill="#f3e8ff" data-stroke="#9333ea" title="Roxo"></div>
-    <div class="color-dot" style="background:#fb923c;" data-fill="#ffedd5" data-stroke="#ea580c" title="Laranja"></div>
-  </div>
-
-  <div class="toolbar-sep"></div>
-
-  <!-- Grupo Tipografia & Fonte -->
-  <div class="button-group" title="Tipografia e estilo de fonte do diagrama">
-    <span class="color-label">Fonte:</span>
-    <select id="font-size-select" title="Alterar tamanho da fonte do diagrama">
-      <option value="9px">9px</option>
-      <option value="10px">10px</option>
-      <option value="11px">11px</option>
-      <option value="12px" selected>12px (Padrão)</option>
-      <option value="13px">13px</option>
-      <option value="14px">14px</option>
-      <option value="16px">16px</option>
-      <option value="18px">18px</option>
-      <option value="20px">20px</option>
-    </select>
-    <button id="btn-font-bold" class="btn-font-toggle" title="Alternar Negrito (Ctrl+B)"><b>B</b></button>
-    <button id="btn-font-italic" class="btn-font-toggle" title="Alternar Itálico (Ctrl+I)"><i>I</i></button>
-  </div>
-
-  <div class="toolbar-sep"></div>
-
-  <!-- Grupo Alinhamento -->
-  <div class="button-group">
-    <button id="btn-align-left" title="Alinhar os elementos selecionados pela esquerda">
-      ⬅️ Alinhar
-    </button>
-    <button id="btn-align-middle" title="Alinhar os elementos selecionados pelo centro horizontal">
-      ↕️ Centralizar
-    </button>
-    <button id="btn-distribute-h" title="Distribuir os elementos selecionados com espaçamento igual">
-      ↔️ Distribuir
-    </button>
-  </div>
-
-  <div class="toolbar-sep"></div>
-
-  <!-- Grupo Visualização & Zoom -->
-  <div class="button-group">
-    <button id="btn-props-toggle" title="Mostrar/ocultar o painel de propriedades">
-      🧾 Propriedades
-    </button>
-    <button id="btn-search" title="Localizar elementos no diagrama (Ctrl+F)">
-      🔍
-    </button>
-    <button id="btn-zoom-out" title="Diminuir zoom">
-      ➖
-    </button>
-    <button id="btn-zoom-in" title="Aumentar zoom">
-      ➕
-    </button>
-    <button id="btn-zoom-fit" title="Ajustar diagrama à tela">
-      🎯
-    </button>
-    <button id="btn-zoom-reset" title="Zoom 100% (1:1)">
-      1:1
-    </button>
-  </div>
-
-  <div class="toolbar-sep"></div>
-
-  <!-- Grupo Exportação Gráfica -->
-  <div class="button-group">
-    <button id="btn-export-svg" title="Exportar imagem vetorial (.svg)">
-      🖼️ SVG
-    </button>
-    <button id="btn-export-png" title="Exportar imagem em alta resolução (.png)">
-      📷 PNG
-    </button>
-    <button id="btn-export-pdf" title="Imprimir o diagrama (escolha &quot;Salvar como PDF&quot;)">
-      🖨️ PDF
-    </button>
-  </div>
-
-  <div class="toolbar-sep"></div>
-
-  <!-- Seletor de Presets -->
-  <div class="button-group">
-    <!--PRESET_SELECT_START-->
-    <select id="preset-select" title="Carregar um diagrama de teste ou exemplo integrado">
-      <option value="">-- Exemplos / Testes --</option>
-      <option value="06-bus-boarding-process.bpmn">06. Ônibus Completo (4 Raias)</option>
-      <option value="04-incident-management.bpmn">04. Gestão de Incidentes (2 Raias)</option>
-      <option value="03-order-fulfillment.bpmn">03. Atendimento de Pedido (AND Split/Join)</option>
-      <option value="02-credit-card-approval.bpmn">02. Cartão de Crédito (XOR Gateway)</option>
-      <option value="01-user-onboarding.bpmn">01. Onboarding Linear</option>
-      <option value="05-document-revision-cycle.bpmn">05. Revisão de Documentos (Loop)</option>
-      <option value="example-complete.bpmn">Exemplo Referência (Expense Approval)</option>
-    </select>
-    <!--PRESET_SELECT_END-->
   </div>
 
   <!-- Badge de Status do Arquivo -->
@@ -788,10 +1224,73 @@ def render_editor_html(vendor_dir=None):
 <div id="notice-banner" role="status" aria-live="polite"></div>
 
 <div id="workspace">
+ <div id="canvas-area">
   <div id="canvas"></div>
+
+  <!-- Barra contextual (F2.2): só aparece com seleção -->
+  <div id="context-toolbar" role="toolbar" aria-label="Formatação da seleção" hidden>
+    <div class="ctx-group" role="group" aria-label="Cor">
+      <button type="button" class="color-dot" style="background:#ffffff;" data-fill="#ffffff" data-stroke="#22242a" aria-label="Cor: Padrão (Branco)" aria-pressed="false" title="Padrão (Branco)"></button>
+      <button type="button" class="color-dot" style="background:#38bdf8;" data-fill="#e0f2fe" data-stroke="#0284c7" aria-label="Cor: Azul" aria-pressed="false" title="Azul"></button>
+      <button type="button" class="color-dot" style="background:#4ade80;" data-fill="#dcfce7" data-stroke="#16a34a" aria-label="Cor: Verde" aria-pressed="false" title="Verde"></button>
+      <button type="button" class="color-dot" style="background:#facc15;" data-fill="#fef9c3" data-stroke="#ca8a04" aria-label="Cor: Amarelo" aria-pressed="false" title="Amarelo"></button>
+      <button type="button" class="color-dot" style="background:#f87171;" data-fill="#fee2e2" data-stroke="#dc2626" aria-label="Cor: Vermelho" aria-pressed="false" title="Vermelho"></button>
+      <button type="button" class="color-dot" style="background:#c084fc;" data-fill="#f3e8ff" data-stroke="#9333ea" aria-label="Cor: Roxo" aria-pressed="false" title="Roxo"></button>
+      <button type="button" class="color-dot" style="background:#fb923c;" data-fill="#ffedd5" data-stroke="#ea580c" aria-label="Cor: Laranja" aria-pressed="false" title="Laranja"></button>
+    </div>
+    <div class="ctx-group" role="group" aria-label="Fonte">
+      <select id="font-size-select" aria-label="Tamanho da fonte" title="Alterar tamanho da fonte do elemento selecionado">
+        <option value="9px">9px</option>
+        <option value="10px">10px</option>
+        <option value="11px">11px</option>
+        <option value="12px" selected>12px (Padrão)</option>
+        <option value="13px">13px</option>
+        <option value="14px">14px</option>
+        <option value="16px">16px</option>
+        <option value="18px">18px</option>
+        <option value="20px">20px</option>
+      </select>
+      <button type="button" id="btn-font-bold" class="btn-font-toggle" aria-label="Negrito" aria-pressed="false" title="Alternar Negrito (Ctrl+B)"><b>B</b></button>
+      <button type="button" id="btn-font-italic" class="btn-font-toggle" aria-label="Itálico" aria-pressed="false" title="Alternar Itálico (Ctrl+I)"><i>I</i></button>
+    </div>
+    <div class="ctx-group" id="ctx-align-group" role="group" aria-label="Alinhamento" hidden>
+      <button type="button" id="btn-align-left" aria-label="Alinhar pela esquerda" title="Alinhar pela esquerda: leva os elementos selecionados à borda esquerda do mais à esquerda">⇤</button>
+      <button type="button" id="btn-align-center" aria-label="Centro vertical" title="Centro vertical: alinha os elementos pelo eixo vertical central (mesma coluna)">⇹</button>
+      <button type="button" id="btn-align-right" aria-label="Alinhar pela direita" title="Alinhar pela direita: leva os elementos selecionados à borda direita do mais à direita">⇥</button>
+      <button type="button" id="btn-align-top" aria-label="Alinhar pelo topo" title="Alinhar pelo topo: leva os elementos selecionados à borda superior do mais alto">⤒</button>
+      <button type="button" id="btn-align-middle" aria-label="Centro horizontal" title="Centro horizontal: alinha os elementos pelo eixo horizontal central (mesma linha)">⇕</button>
+      <button type="button" id="btn-align-bottom" aria-label="Alinhar pela base" title="Alinhar pela base: leva os elementos selecionados à borda inferior do mais baixo">⤓</button>
+      <button type="button" id="btn-distribute-h" aria-label="Distribuir na horizontal" title="Distribuir na horizontal: espaçamento igual entre os elementos (3 ou mais)">↔</button>
+      <button type="button" id="btn-distribute-v" aria-label="Distribuir na vertical" title="Distribuir na vertical: espaçamento igual entre os elementos (3 ou mais)">↕</button>
+    </div>
+    <div class="ctx-group" id="ctx-type-group" role="group" aria-label="Tipo" hidden>
+      <select id="ctx-type" aria-label="Tipo do elemento" title="Trocar o tipo do elemento selecionado"></select>
+    </div>
+  </div>
+
+  <div id="minimap" role="img" aria-label="Minimapa do diagrama (clique para navegar)"></div>
+ </div>
+
   <aside id="properties-panel">
     <h2>Propriedades</h2>
-    <div id="prop-empty">Selecione um elemento no diagrama para editar nome, documentação, tipo e — em conexões — a condição da decisão.</div>
+    <div id="prop-empty">
+      <p class="prop-hint" id="prop-hint">Selecione um elemento no diagrama para editar nome, documentação, tipo e — em conexões — a condição da decisão.</p>
+      <div id="prop-process" class="prop-process">
+        <h3>Processo</h3>
+        <div class="prop-field">
+          <label for="proc-id">Identificador do processo</label>
+          <input type="text" id="proc-id" readonly />
+        </div>
+        <div class="prop-field">
+          <label for="proc-name">Nome do processo</label>
+          <input type="text" id="proc-name" placeholder="Nome do processo" />
+        </div>
+        <div class="prop-field">
+          <label for="proc-doc">Documentação / versão</label>
+          <textarea id="proc-doc" placeholder="Descrição, versão e observações do processo"></textarea>
+        </div>
+      </div>
+    </div>
     <div id="prop-body" class="hidden">
       <div class="prop-field">
         <label for="prop-id">Identificador</label>
@@ -823,6 +1322,44 @@ def render_editor_html(vendor_dir=None):
           </select>
         </div>
       </div>
+      <div id="prop-timer-fields" hidden>
+        <div class="prop-field">
+          <label for="prop-timer-type">Tipo do temporizador</label>
+          <select id="prop-timer-type">
+            <option value="timeDate">Data/hora específica</option>
+            <option value="timeDuration">Duração (espera)</option>
+            <option value="timeCycle">Ciclo (repetição)</option>
+          </select>
+        </div>
+        <div class="prop-field">
+          <label for="prop-timer-value">Valor do temporizador</label>
+          <input type="text" id="prop-timer-value" placeholder="ex.: PT4H (duração ISO 8601)" />
+        </div>
+      </div>
+      <div id="prop-message-fields" hidden>
+        <div class="prop-field">
+          <label for="prop-message-name">Nome da mensagem</label>
+          <input type="text" id="prop-message-name" placeholder="ex.: Pedido recebido" />
+        </div>
+      </div>
+      <div id="prop-error-fields" hidden>
+        <div class="prop-field">
+          <label for="prop-error-code">Código do erro</label>
+          <input type="text" id="prop-error-code" placeholder="ex.: ERR_PAGAMENTO" />
+        </div>
+      </div>
+      <div id="prop-task-fields" hidden>
+        <div class="prop-field">
+          <label for="prop-assignee">Responsável (atribuído a)</label>
+          <input type="text" id="prop-assignee" placeholder="ex.: Analista de crédito" />
+        </div>
+      </div>
+      <div id="prop-lane-fields" hidden>
+        <div class="prop-field">
+          <label for="prop-lane">Raia</label>
+          <select id="prop-lane"></select>
+        </div>
+      </div>
       <div id="prop-flow-fields" class="hidden">
         <div class="prop-field">
           <label for="prop-condition">Condição da decisão</label>
@@ -845,6 +1382,52 @@ def render_editor_html(vendor_dir=None):
   </aside>
 </div>
 
+<footer id="status-footer" aria-label="Barra de status">
+  <span id="selection-info">Nenhuma seleção</span>
+  <span class="footer-spacer"></span>
+  <span id="zoom-percent" aria-label="Zoom atual" title="Zoom atual">100%</span>
+  <button type="button" id="btn-zoom-selection" aria-label="Ajustar à seleção (sem seleção, ajusta ao diagrama)" title="Ajustar o zoom para caber a seleção; sem seleção, ajusta ao diagrama">⤢ Ajustar à seleção</button>
+</footer>
+
+<div id="shortcuts-dialog" class="dialog-backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title" tabindex="-1">
+    <h2 id="shortcuts-title">Atalhos de teclado</h2>
+    <table class="shortcuts-table">
+      <tbody>
+        <tr><th scope="row">Ctrl+S</th><td>Salvar</td></tr>
+        <tr><th scope="row">Ctrl+O</th><td>Abrir arquivo</td></tr>
+        <tr><th scope="row">Ctrl+Z</th><td>Desfazer</td></tr>
+        <tr><th scope="row">Ctrl+Y / Ctrl+Shift+Z</th><td>Refazer</td></tr>
+        <tr><th scope="row">Ctrl+F</th><td>Buscar no diagrama</td></tr>
+        <tr><th scope="row">Ctrl+B / Ctrl+I</th><td>Negrito / itálico na seleção</td></tr>
+        <tr><th scope="row">Ctrl+A</th><td>Selecionar tudo</td></tr>
+        <tr><th scope="row">Ctrl+C / Ctrl+V</th><td>Copiar / colar elementos</td></tr>
+        <tr><th scope="row">Delete</th><td>Excluir a seleção</td></tr>
+        <tr><th scope="row">Duplo clique / F2</th><td>Editar o nome do elemento</td></tr>
+        <tr><th scope="row">Ctrl + roda do mouse</th><td>Zoom no diagrama</td></tr>
+        <tr><th scope="row">Setas / Enter / Esc</th><td>Navegar e fechar os menus</td></tr>
+        <tr><th scope="row">?</th><td>Mostrar esta lista (fora de campos de texto)</td></tr>
+      </tbody>
+    </table>
+    <button type="button" id="shortcuts-close" class="btn-primary">Fechar (Esc)</button>
+  </div>
+</div>
+
+<div id="templates-dialog" class="dialog-backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="templates-title" tabindex="-1">
+    <h2 id="templates-title">Novo diagrama</h2>
+    <p class="dialog-hint">Escolha um modelo pronto para começar ou comece em branco.</p>
+    <div class="template-grid" id="template-grid">
+      <button type="button" class="template-card" data-template="_blank"><strong>Em branco</strong><span>Só o evento de início.</span></button>
+      <button type="button" class="template-card" data-template="linear"><strong>Linear</strong><span>Início, três etapas em sequência e fim.</span></button>
+      <button type="button" class="template-card" data-template="decision"><strong>Com decisão</strong><span>Uma decisão exclusiva com dois caminhos.</span></button>
+      <button type="button" class="template-card" data-template="lanes"><strong>Com raias</strong><span>Duas raias com passagem de responsabilidade.</span></button>
+      <button type="button" class="template-card" data-template="loop"><strong>Com laço</strong><span>Revisão que volta para correção até aprovar.</span></button>
+    </div>
+    <button type="button" id="templates-close">Cancelar (Esc)</button>
+  </div>
+</div>
+
 <div id="drop-overlay">
   <svg style="width:48px;height:48px;fill:#38bdf8;" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
   <span>Solte o arquivo .bpmn aqui para abrir</span>
@@ -856,6 +1439,7 @@ def render_editor_html(vendor_dir=None):
   /*PRESETS_START*/
   const PRESETS = {presets_json};
   /*PRESETS_END*/
+  const TEMPLATES = {templates_json};
   let DEFAULT_DIAGRAM_NAME = "";
   let DEFAULT_DIAGRAM_XML = null;
 
@@ -887,9 +1471,32 @@ def render_editor_html(vendor_dir=None):
   const propDefault = document.getElementById('prop-default');
   const btnValidate = document.getElementById('btn-validate');
   const validationResults = document.getElementById('validation-results');
-  const btnAlignLeft = document.getElementById('btn-align-left');
-  const btnAlignMiddle = document.getElementById('btn-align-middle');
-  const btnDistributeH = document.getElementById('btn-distribute-h');
+  const menuUndo = document.getElementById('menu-undo');
+  const menuRedo = document.getElementById('menu-redo');
+  menuUndo.disabled = true;
+  menuRedo.disabled = true;
+  const contextToolbar = document.getElementById('context-toolbar');
+  const ctxAlignGroup = document.getElementById('ctx-align-group');
+  const ctxTypeGroup = document.getElementById('ctx-type-group');
+  const ctxType = document.getElementById('ctx-type');
+  const zoomPercentEl = document.getElementById('zoom-percent');
+  const selectionInfoEl = document.getElementById('selection-info');
+  const minimapEl = document.getElementById('minimap');
+  const propProcess = document.getElementById('prop-process');
+  const procId = document.getElementById('proc-id');
+  const procName = document.getElementById('proc-name');
+  const procDoc = document.getElementById('proc-doc');
+  const propTimerFields = document.getElementById('prop-timer-fields');
+  const propTimerType = document.getElementById('prop-timer-type');
+  const propTimerValue = document.getElementById('prop-timer-value');
+  const propMessageFields = document.getElementById('prop-message-fields');
+  const propMessageName = document.getElementById('prop-message-name');
+  const propErrorFields = document.getElementById('prop-error-fields');
+  const propErrorCode = document.getElementById('prop-error-code');
+  const propTaskFields = document.getElementById('prop-task-fields');
+  const propAssignee = document.getElementById('prop-assignee');
+  const propLaneFields = document.getElementById('prop-lane-fields');
+  const propLane = document.getElementById('prop-lane');
   const btnExportPdf = document.getElementById('btn-export-pdf');
   const fontSizeSelect = document.getElementById('font-size-select');
   const btnFontBold = document.getElementById('btn-font-bold');
@@ -911,8 +1518,19 @@ def render_editor_html(vendor_dir=None):
   let draftRecoveryPending = false;
   const noticeBanner = document.getElementById('notice-banner');
 
+  // O aviso fica no canto inferior direito, mas acima do minimapa (quando visível)
+  // para nunca cobrir a miniatura de navegação.
+  function placeToast() {{
+    const mini = document.getElementById('minimap');
+    const rect = mini && !mini.hidden ? mini.getBoundingClientRect() : null;
+    toast.style.bottom = rect && rect.height > 0
+      ? Math.round(window.innerHeight - rect.top + 12) + 'px'
+      : '';
+  }}
+
   function showToast(msg) {{
     toast.textContent = msg;
+    placeToast();
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 2800);
   }}
@@ -962,6 +1580,8 @@ def render_editor_html(vendor_dir=None):
       const cs = modeler.get('commandStack');
       btnUndo.disabled = !cs.canUndo();
       btnRedo.disabled = !cs.canRedo();
+      menuUndo.disabled = btnUndo.disabled;
+      menuRedo.disabled = btnRedo.disabled;
     }} catch (e) {{}}
   }}
 
@@ -1327,6 +1947,26 @@ def render_editor_html(vendor_dir=None):
     fontStyleCommands: ['type', FontStyleCommands]
   }};
 
+  // Comando composto: executa vários comandos como UM só passo do histórico
+  // (um Ctrl+Z desfaz tudo). Usado pelos campos do painel que mexem em mais de um objeto
+  // (ex.: criar a mensagem e referenciá-la no evento).
+  function MultiCommandHandler(commandStack) {{
+    this._commandStack = commandStack;
+  }}
+  MultiCommandHandler.$inject = ['commandStack'];
+  MultiCommandHandler.prototype.preExecute = function (context) {{
+    const commandStack = this._commandStack;
+    context.forEach(entry => commandStack.execute(entry.cmd, entry.context));
+  }};
+  function MultiCommandRegistration(commandStack) {{
+    commandStack.registerHandler('editor.multiCommand', MultiCommandHandler);
+  }}
+  MultiCommandRegistration.$inject = ['commandStack'];
+  const MultiCommandModule = {{
+    __init__: ['multiCommandRegistration'],
+    multiCommandRegistration: ['type', MultiCommandRegistration]
+  }};
+
   // Espelho derivado do DI: só elementos com fonte diferente do padrão.
   function refreshFontStylesFromDiagram() {{
     const mirror = {{}};
@@ -1352,6 +1992,224 @@ def render_editor_html(vendor_dir=None):
     return changes.length;
   }}
 
+  // ---------------------------------------------------------------------
+  // Menus (F2.1/F2.4): abrem por clique e teclado (Enter/Espaço/Setas/Esc) e
+  // fecham ao clicar fora. Não dependem do modeler.
+  // ---------------------------------------------------------------------
+  function isTextEditingTarget(el) {{
+    if (!el || !el.tagName) return false;
+    const tag = el.tagName.toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    if (tag === 'INPUT') {{
+      const type = (el.getAttribute('type') || 'text').toLowerCase();
+      return ['button', 'checkbox', 'radio', 'submit', 'reset', 'file', 'range', 'color', 'image'].indexOf(type) === -1;
+    }}
+    return !!el.isContentEditable;
+  }}
+
+  const menus = Array.from(document.querySelectorAll('[data-menu]'));
+
+  function menuTrigger(menu) {{ return menu.querySelector('.menu-trigger'); }}
+  function menuList(menu) {{ return menu.querySelector('.menu-list'); }}
+  function menuItems(menu) {{
+    return Array.from(menuList(menu).querySelectorAll('[role^="menuitem"], select')).filter(el => !el.disabled);
+  }}
+
+  function closeMenus(returnFocus) {{
+    menus.forEach(menu => {{
+      const list = menuList(menu);
+      if (list.hidden) return;
+      const hadFocus = menu.contains(document.activeElement);
+      list.hidden = true;
+      menuTrigger(menu).setAttribute('aria-expanded', 'false');
+      if (returnFocus && hadFocus) menuTrigger(menu).focus();
+    }});
+  }}
+
+  function openMenu(menu, focusWhich) {{
+    closeMenus(false);
+    menuList(menu).hidden = false;
+    menuTrigger(menu).setAttribute('aria-expanded', 'true');
+    if (focusWhich) {{
+      const items = menuItems(menu);
+      const target = focusWhich === 'last' ? items[items.length - 1] : items[0];
+      if (target) target.focus();
+    }}
+  }}
+
+  menus.forEach((menu, index) => {{
+    const trigger = menuTrigger(menu);
+    const list = menuList(menu);
+
+    trigger.addEventListener('click', (e) => {{
+      if (!list.hidden) {{
+        closeMenus(false);
+      }} else {{
+        // detail === 0: o clique veio do teclado (Enter/Espaço) -> foca o primeiro item.
+        openMenu(menu, e.detail === 0 ? 'first' : null);
+      }}
+    }});
+
+    menu.addEventListener('keydown', (e) => {{
+      const open = !list.hidden;
+      const onTrigger = e.target === trigger;
+      if (onTrigger && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {{
+        e.preventDefault();
+        openMenu(menu, e.key === 'ArrowUp' ? 'last' : 'first');
+        return;
+      }}
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {{
+        if (e.target.tagName === 'SELECT') return;
+        if (!open && !onTrigger) return;
+        e.preventDefault();
+        const next = menus[(index + (e.key === 'ArrowRight' ? 1 : menus.length - 1)) % menus.length];
+        if (open) {{
+          openMenu(next, 'first');
+        }} else {{
+          menuTrigger(next).focus();
+        }}
+        return;
+      }}
+      if (!open || onTrigger) return;
+      const items = menuItems(menu);
+      const at = items.indexOf(document.activeElement);
+      if (e.target.tagName === 'SELECT' && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) return;
+      if (e.key === 'ArrowDown') {{
+        e.preventDefault();
+        items[(at + 1) % items.length].focus();
+      }} else if (e.key === 'ArrowUp') {{
+        e.preventDefault();
+        items[(at - 1 + items.length) % items.length].focus();
+      }} else if (e.key === 'Home') {{
+        e.preventDefault();
+        items[0].focus();
+      }} else if (e.key === 'End') {{
+        e.preventDefault();
+        items[items.length - 1].focus();
+      }} else if (e.key === 'Tab') {{
+        closeMenus(false);
+      }}
+    }});
+
+    // Escolher um item fecha o menu (a ação do item roda antes, no próprio botão).
+    list.addEventListener('click', (e) => {{
+      if (e.target.closest('[role^="menuitem"]')) closeMenus(true);
+    }});
+    list.addEventListener('mousedown', (e) => {{
+      if (!e.target.closest('select, button')) e.preventDefault();
+    }});
+  }});
+
+  document.addEventListener('mousedown', (e) => {{
+    if (!e.target.closest('[data-menu]')) closeMenus(false);
+  }});
+  document.addEventListener('focusin', (e) => {{
+    if (!e.target.closest('[data-menu]')) closeMenus(false);
+  }});
+
+  // ---------------------------------------------------------------------
+  // Diálogos (atalhos F2.13 e modelos F2.14): modais, Esc fecha, foco preso.
+  // ---------------------------------------------------------------------
+  const shortcutsDialog = document.getElementById('shortcuts-dialog');
+  const templatesDialog = document.getElementById('templates-dialog');
+  let dialogOpener = null;
+
+  function openDialog(dialog, focusSelector) {{
+    if (dialog.hidden) {{
+      const active = document.activeElement;
+      const owner = active && active.closest ? active.closest('[data-menu]') : null;
+      dialogOpener = owner ? menuTrigger(owner) : active;
+    }}
+    closeMenus(false);
+    dialog.hidden = false;
+    const inner = dialog.querySelector('.dialog');
+    const target = (focusSelector && dialog.querySelector(focusSelector)) || inner;
+    target.focus();
+  }}
+
+  function closeDialog(dialog) {{
+    if (dialog.hidden) return;
+    dialog.hidden = true;
+    if (dialogOpener && document.contains(dialogOpener) && dialogOpener.focus) dialogOpener.focus();
+    dialogOpener = null;
+  }}
+
+  function openDialogElement() {{
+    return [shortcutsDialog, templatesDialog].find(d => !d.hidden) || null;
+  }}
+
+  function openShortcuts() {{ openDialog(shortcutsDialog, '#shortcuts-close'); }}
+  function closeShortcuts() {{ closeDialog(shortcutsDialog); }}
+  function openTemplatesDialog() {{ openDialog(templatesDialog, '.template-card'); }}
+  function closeTemplatesDialog() {{ closeDialog(templatesDialog); }}
+
+  document.getElementById('shortcuts-close').addEventListener('click', closeShortcuts);
+  document.getElementById('templates-close').addEventListener('click', closeTemplatesDialog);
+  [shortcutsDialog, templatesDialog].forEach(dialog => {{
+    dialog.addEventListener('mousedown', (e) => {{
+      if (e.target === dialog) closeDialog(dialog);
+    }});
+  }});
+
+  document.addEventListener('keydown', (e) => {{
+    if (e.key === 'Escape') {{
+      const dialog = openDialogElement();
+      if (dialog) {{
+        e.preventDefault();
+        e.stopPropagation();
+        closeDialog(dialog);
+        return;
+      }}
+      if (menus.some(menu => !menuList(menu).hidden)) {{
+        e.preventDefault();
+        e.stopPropagation();
+        closeMenus(true);
+      }}
+      return;
+    }}
+    if (e.key === 'Tab') {{
+      const dialog = openDialogElement();
+      if (!dialog) return;
+      const focusables = Array.from(dialog.querySelectorAll('button, [href], input, select, textarea'))
+        .filter(el => !el.disabled);
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!dialog.contains(document.activeElement)) {{
+        e.preventDefault();
+        first.focus();
+      }} else if (e.shiftKey && (document.activeElement === first || document.activeElement === dialog.querySelector('.dialog'))) {{
+        e.preventDefault();
+        last.focus();
+      }} else if (!e.shiftKey && document.activeElement === last) {{
+        e.preventDefault();
+        first.focus();
+      }}
+    }}
+  }}, true);
+
+  // Tecla "?" (fora de campos de texto) abre a lista de atalhos.
+  document.addEventListener('keydown', (e) => {{
+    if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+    if (isTextEditingTarget(e.target) || openDialogElement()) return;
+    e.preventDefault();
+    openShortcuts();
+  }});
+
+  // ---------------------------------------------------------------------
+  // Tradução pt-BR (F2.6): módulo `translate` do bpmn-js injetado como módulo
+  // adicional. O que não está no dicionário cai no texto original, sem erro.
+  // ---------------------------------------------------------------------
+  const PT_BR = {pt_br_json};
+  function translatePtBr(template, replacements) {{
+    const text = Object.prototype.hasOwnProperty.call(PT_BR, template) ? PT_BR[template] : template;
+    const values = replacements || {{}};
+    return String(text).replace(/[{{]([^}}]+)[}}]/g, (match, key) => (
+      Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match
+    ));
+  }}
+  const TranslateModule = {{ translate: ['value', translatePtBr] }};
+
   if (typeof BpmnJS === 'undefined') {{
     showError('Não foi possível carregar a biblioteca bpmn-js do CDN. Verifique sua conexão com a internet.');
   }} else {{
@@ -1361,7 +2219,9 @@ def render_editor_html(vendor_dir=None):
       gridSnapping: {{ active: true }},
       additionalModules: [
         CustomResizeModule,
-        FontStyleModule
+        FontStyleModule,
+        MultiCommandModule,
+        TranslateModule
       ]
     }});
 
@@ -1371,12 +2231,15 @@ def render_editor_html(vendor_dir=None):
       updateUndoRedoState();
       applyAllElementFontStyles();
       updateFontToolbarFromSelection(getSelectedElements());
+      updateContextToolbar();
       scheduleDraftSave();
     }});
 
     // Atualiza controles de fonte na toolbar quando a seleção de elementos muda
     modeler.on('selection.changed', (e) => {{
+      flushPendingFields();
       updateFontToolbarFromSelection(getSelectedElements());
+      updateContextToolbar();
       updatePropertiesPanel(e.newSelection || []);
     }});
 
@@ -1451,12 +2314,23 @@ def render_editor_html(vendor_dir=None):
       return expression ? (expression.body || '') : '';
     }}
 
+    const PROP_HINT_DEFAULT = document.getElementById('prop-hint') ? document.getElementById('prop-hint').textContent : '';
+
     function updatePropertiesPanel(selection) {{
       const element = (selection && selection.length === 1) ? selection[0] : null;
       const isRealElement = !!element && element.type !== 'bpmn:Process' && !element.labelTarget;
 
       propEmpty.style.display = isRealElement ? 'none' : 'block';
+      const hint = document.getElementById('prop-hint');
+      if (hint) {{
+        hint.textContent = (selection && selection.length > 1)
+          ? selection.length + ' elementos selecionados. Use a barra acima do diagrama para cor, fonte e alinhamento; selecione um só elemento para editar as propriedades.'
+          : PROP_HINT_DEFAULT;
+      }}
       propBody.classList.toggle('hidden', !isRealElement);
+      // Sem seleção: propriedades do processo (F2.12).
+      propProcess.hidden = !!(selection && selection.length) || !processBusinessObject();
+      if (!propProcess.hidden) populateProcessFields();
       if (!isRealElement) return;
 
       const businessObject = element.businessObject;
@@ -1476,16 +2350,22 @@ def render_editor_html(vendor_dir=None):
       }} else {{
         populateTypeSelector(element);
       }}
+      updateSpecificFields(flow ? null : element);
     }}
 
     // Seletor "Tipo do elemento": só tipos compatíveis com o elemento (tarefas entre
     // si, gateways entre si), com o tipo ATUAL selecionado. Sem troca válida
     // (eventos de início/fim, raias, subprocessos...) o campo inteiro fica oculto.
     function populateTypeSelector(element) {{
+      const hasGroup = fillTypeSelect(propType, element);
+      propShapeFields.classList.toggle('hidden', !hasGroup);
+    }}
+
+    // Preenche um <select> com os tipos compatíveis com `element`; false se não há troca válida.
+    function fillTypeSelect(selectEl, element) {{
       const group = TYPE_GROUPS.find(g => g.members.indexOf(element.type) !== -1);
-      propShapeFields.classList.toggle('hidden', !group);
-      propType.innerHTML = '';
-      if (!group) return;
+      selectEl.innerHTML = '';
+      if (!group) return false;
       const options = group.offered.map(value => ({{
         value: value,
         label: (TYPE_OPTIONS.find(o => o.value === value) || {{ label: value.replace('bpmn:', '') }}).label
@@ -1497,39 +2377,107 @@ def render_editor_html(vendor_dir=None):
         const opt = document.createElement('option');
         opt.value = o.value;
         opt.textContent = o.label;
-        propType.appendChild(opt);
+        selectEl.appendChild(opt);
       }});
-      propType.value = element.type;
+      selectEl.value = element.type;
+      return true;
     }}
 
-    function applyPropertyName() {{
-      const element = currentPropertyElement();
-      if (!element) return;
-      try {{
-        modeler.get('modeling').updateLabel(element, propName.value);
-      }} catch (e) {{
-        showError(e);
+    // -------------------------------------------------------------------
+    // Edição enquanto digita (F2.10): debounce curto, e as teclas seguidas no
+    // mesmo campo/elemento são COALESCIDAS em um único passo de histórico
+    // (desfaz o comando anterior da mesma sessão e refaz com o texto novo).
+    // O campo nunca é repreenchido, então foco e cursor ficam intactos.
+    // -------------------------------------------------------------------
+    const TYPING_DEBOUNCE_MS = 300;
+    let typingSession = null;
+    const liveFields = [];
+
+    function endTypingSession() {{
+      typingSession = null;
+    }}
+
+    function runCoalesced(key, action) {{
+      const commandStack = modeler.get('commandStack');
+      if (typingSession && typingSession.key === key
+          && typingSession.endIdx === commandStack._stackIdx && typingSession.steps > 0) {{
+        for (let i = 0; i < typingSession.steps; i++) commandStack.undo();
+      }} else {{
+        typingSession = null;
       }}
+      const before = commandStack._stackIdx;
+      action();
+      const steps = commandStack._stackIdx - before;
+      typingSession = steps > 0
+        ? {{ key: key, steps: steps, endIdx: commandStack._stackIdx }}
+        : null;
     }}
 
-    function applyPropertyDocumentation() {{
-      const element = currentPropertyElement();
+    function bindLiveField(input, fieldKey, applyFn, getTarget) {{
+      const currentTarget = getTarget || currentPropertyElement;
+      let timer = null;
+      let target = null;
+      const run = () => {{
+        timer = null;
+        const element = target;
+        target = null;
+        if (!element) return;
+        try {{
+          runCoalesced(fieldKey + ':' + element.id, () => applyFn(element));
+        }} catch (e) {{
+          showError(e);
+        }}
+      }};
+      input.addEventListener('input', () => {{
+        target = currentTarget() || target;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(run, TYPING_DEBOUNCE_MS);
+      }});
+      // `change` (sair do campo) confirma na hora e encerra a sessão de digitação.
+      input.addEventListener('change', () => {{
+        if (timer) {{ clearTimeout(timer); timer = null; }}
+        const element = target || currentTarget();
+        target = null;
+        if (!element) return;
+        try {{
+          runCoalesced(fieldKey + ':' + element.id, () => applyFn(element));
+        }} catch (e) {{
+          showError(e);
+        }}
+        endTypingSession();
+      }});
+      liveFields.push({{
+        flush: () => {{ if (timer) {{ clearTimeout(timer); run(); }} }}
+      }});
+    }}
+
+    function flushPendingFields() {{
+      liveFields.forEach(field => field.flush());
+      endTypingSession();
+    }}
+
+    function applyPropertyName(element) {{
+      element = element || currentPropertyElement();
       if (!element) return;
-      try {{
-        const moddle = modeler.get('moddle');
-        const text = propDocumentation.value.trim();
-        const documentation = text
-          ? [moddle.create('bpmn:Documentation', {{ text: text }})]
-          : [];
-        modeler.get('modeling').updateProperties(element, {{ documentation: documentation }});
-      }} catch (e) {{
-        showError(e);
-      }}
+      if ((element.businessObject.name || '') === propName.value) return;
+      modeler.get('modeling').updateLabel(element, propName.value);
     }}
 
-    function applyPropertyType() {{
+    function applyPropertyDocumentation(element) {{
+      element = element || currentPropertyElement();
+      if (!element) return;
+      const moddle = modeler.get('moddle');
+      const text = propDocumentation.value.trim();
+      if (documentationOf(element).trim() === text) return;
+      const documentation = text
+        ? [moddle.create('bpmn:Documentation', {{ text: text }})]
+        : [];
+      modeler.get('modeling').updateProperties(element, {{ documentation: documentation }});
+    }}
+
+    function applyPropertyType(targetType) {{
       const element = currentPropertyElement();
-      const target = propType.value;
+      const target = typeof targetType === 'string' ? targetType : propType.value;
       if (!element || !target || element.type === target) return;
       try {{
         const replaced = modeler.get('bpmnReplace').replaceElement(element, {{ type: target }});
@@ -1571,6 +2519,299 @@ def render_editor_html(vendor_dir=None):
         showError(e);
       }}
     }}
+
+    // ---------------------------------------------------------------------
+    // Campos específicos por tipo (F2.11): tempo, mensagem, erro, responsável e
+    // raia. Tudo vai para o XML BPMN padrão (eventDefinitions, rootElements,
+    // resources) pelo `modeling`, então desfaz/refaz e salvar/reabrir funcionam.
+    // ---------------------------------------------------------------------
+    const TIMER_KINDS = ['timeDate', 'timeDuration', 'timeCycle'];
+    // Qualquer atividade (tarefas de todos os tipos, subprocesso, atividade
+    // chamada) aceita responsável: humanas usam HumanPerformer, as demais Performer.
+    function assigneeRoleType(element) {{
+      const bo = element && !element.waypoints && element.businessObject;
+      if (!bo || !bo.$instanceOf || !bo.$instanceOf('bpmn:Activity')) return null;
+      return (element.type === 'bpmn:UserTask' || element.type === 'bpmn:ManualTask')
+        ? 'bpmn:HumanPerformer' : 'bpmn:Performer';
+    }}
+
+    function eventDefinitionOf(element, type) {{
+      const defs = (element && element.businessObject && element.businessObject.eventDefinitions) || [];
+      return defs.find(d => d.$type === type) || null;
+    }}
+
+    function timerKindOf(definition) {{
+      return TIMER_KINDS.find(kind => definition[kind]) || 'timeDuration';
+    }}
+
+    function definitionsOf() {{
+      return modeler.getDefinitions();
+    }}
+
+    function uniqueModdleId(prefix) {{
+      const taken = modeler.get('elementRegistry');
+      let n = 1;
+      const used = {{}};
+      (definitionsOf().rootElements || []).forEach(r => {{ used[r.id] = true; }});
+      while (used[prefix + '_' + n] || taken.get(prefix + '_' + n)) n++;
+      return prefix + '_' + n;
+    }}
+
+    function assigneeRoleOf(element) {{
+      const resources = (element.businessObject.resources) || [];
+      return resources.find(r => r.$instanceOf && r.$instanceOf('bpmn:ResourceRole')) || null;
+    }}
+
+    function assigneeOf(element) {{
+      const role = assigneeRoleOf(element);
+      const assignment = role && role.resourceAssignmentExpression;
+      return assignment && assignment.expression ? (assignment.expression.body || '') : '';
+    }}
+
+    function leafLanesAround(element) {{
+      return modeler.get('elementRegistry').filter(el =>
+        el.type === 'bpmn:Lane' && el.parent === element.parent
+        && !(el.businessObject.childLaneSet && (el.businessObject.childLaneSet.lanes || []).length)
+      );
+    }}
+
+    function laneOf(element) {{
+      return modeler.get('elementRegistry').filter(el =>
+        el.type === 'bpmn:Lane' && (el.businessObject.flowNodeRef || []).indexOf(element.businessObject) !== -1
+      )[0] || null;
+    }}
+
+    function updateSpecificFields(element) {{
+      const timer = element && eventDefinitionOf(element, 'bpmn:TimerEventDefinition');
+      propTimerFields.hidden = !timer;
+      if (timer) {{
+        const kind = timerKindOf(timer);
+        propTimerType.value = kind;
+        propTimerValue.value = timer[kind] ? (timer[kind].body || '') : '';
+      }}
+      const message = element && eventDefinitionOf(element, 'bpmn:MessageEventDefinition');
+      propMessageFields.hidden = !message;
+      if (message) propMessageName.value = message.messageRef ? (message.messageRef.name || '') : '';
+      const error = element && eventDefinitionOf(element, 'bpmn:ErrorEventDefinition');
+      propErrorFields.hidden = !error;
+      if (error) propErrorCode.value = error.errorRef ? (error.errorRef.errorCode || '') : '';
+      const assignable = !!assigneeRoleType(element);
+      propTaskFields.hidden = !assignable;
+      if (assignable) propAssignee.value = assigneeOf(element);
+
+      propLaneFields.hidden = true;
+      if (element && !element.waypoints && element.type !== 'bpmn:Lane' && element.type !== 'bpmn:Participant') {{
+        const current = laneOf(element);
+        const lanes = current ? leafLanesAround(element) : [];
+        if (current && lanes.length > 1) {{
+          propLane.innerHTML = '';
+          lanes.forEach(lane => {{
+            const opt = document.createElement('option');
+            opt.value = lane.id;
+            opt.textContent = lane.businessObject.name || lane.id;
+            propLane.appendChild(opt);
+          }});
+          propLane.value = current.id;
+          propLaneFields.hidden = false;
+        }}
+      }}
+    }}
+
+    function applyTimer(element) {{
+      const definition = eventDefinitionOf(element, 'bpmn:TimerEventDefinition');
+      if (!definition) return;
+      const kind = propTimerType.value;
+      const value = propTimerValue.value.trim();
+      const current = timerKindOf(definition);
+      if (current === kind && ((definition[kind] && definition[kind].body) || '') === value) return;
+      const props = {{ timeDate: undefined, timeDuration: undefined, timeCycle: undefined }};
+      props[kind] = value ? modeler.get('moddle').create('bpmn:FormalExpression', {{ body: value }}) : undefined;
+      modeler.get('modeling').updateModdleProperties(element, definition, props);
+    }}
+
+    function applyMessageName(element) {{
+      const definition = eventDefinitionOf(element, 'bpmn:MessageEventDefinition');
+      if (!definition) return;
+      const name = propMessageName.value.trim();
+      const modeling = modeler.get('modeling');
+      if (definition.messageRef) {{
+        if ((definition.messageRef.name || '') !== name) {{
+          modeling.updateModdleProperties(element, definition.messageRef, {{ name: name }});
+        }}
+        return;
+      }}
+      if (!name) return;
+      const moddle = modeler.get('moddle');
+      const definitions = definitionsOf();
+      const message = moddle.create('bpmn:Message', {{ id: uniqueModdleId('Message'), name: name }});
+      modeler.get('commandStack').execute('editor.multiCommand', [
+        {{ cmd: 'element.updateModdleProperties', context: {{
+          element: element, moddleElement: definitions,
+          properties: {{ rootElements: (definitions.rootElements || []).concat([message]) }} }} }},
+        {{ cmd: 'element.updateModdleProperties', context: {{
+          element: element, moddleElement: definition, properties: {{ messageRef: message }} }} }}
+      ]);
+    }}
+
+    function applyErrorCode(element) {{
+      const definition = eventDefinitionOf(element, 'bpmn:ErrorEventDefinition');
+      if (!definition) return;
+      const code = propErrorCode.value.trim();
+      const modeling = modeler.get('modeling');
+      if (definition.errorRef) {{
+        if ((definition.errorRef.errorCode || '') !== code) {{
+          modeling.updateModdleProperties(element, definition.errorRef, {{ errorCode: code || undefined }});
+        }}
+        return;
+      }}
+      if (!code) return;
+      const moddle = modeler.get('moddle');
+      const definitions = definitionsOf();
+      const error = moddle.create('bpmn:Error', {{ id: uniqueModdleId('Error'), name: code, errorCode: code }});
+      modeler.get('commandStack').execute('editor.multiCommand', [
+        {{ cmd: 'element.updateModdleProperties', context: {{
+          element: element, moddleElement: definitions,
+          properties: {{ rootElements: (definitions.rootElements || []).concat([error]) }} }} }},
+        {{ cmd: 'element.updateModdleProperties', context: {{
+          element: element, moddleElement: definition, properties: {{ errorRef: error }} }} }}
+      ]);
+    }}
+
+    function applyAssignee(element) {{
+      const roleType = assigneeRoleType(element);
+      if (!roleType) return;
+      const value = propAssignee.value.trim();
+      if (assigneeOf(element) === value) return;
+      const moddle = modeler.get('moddle');
+      const existing = assigneeRoleOf(element);
+      const others = (element.businessObject.resources || []).filter(r => r !== existing);
+      let resources = others;
+      if (value) {{
+        const expression = moddle.create('bpmn:FormalExpression', {{ body: value }});
+        const assignment = moddle.create('bpmn:ResourceAssignmentExpression', {{ expression: expression }});
+        const role = moddle.create(existing ? existing.$type : roleType, {{ resourceAssignmentExpression: assignment }});
+        resources = others.concat([role]);
+      }}
+      modeler.get('modeling').updateModdleProperties(element, element.businessObject, {{ resources: resources }});
+    }}
+
+    function applyLane(element) {{
+      const target = modeler.get('elementRegistry').get(propLane.value);
+      const current = laneOf(element);
+      if (!target || !current || target === current) return;
+      const dy = (target.y + target.height / 2) - (element.y + element.height / 2);
+      const dx = 0;
+      modeler.get('modeling').moveElements([element], {{ x: dx, y: dy }}, element.parent);
+      // Garante a pertinência no modelo mesmo que o bpmn-js não tenha atualizado o flowNodeRef.
+      const moved = laneOf(element);
+      if (moved !== target) {{
+        const commands = [];
+        const remove = current.businessObject.flowNodeRef.filter(r => r !== element.businessObject);
+        commands.push({{ cmd: 'element.updateModdleProperties', context: {{
+          element: current, moddleElement: current.businessObject, properties: {{ flowNodeRef: remove }} }} }});
+        const add = (target.businessObject.flowNodeRef || []).concat([element.businessObject]);
+        commands.push({{ cmd: 'element.updateModdleProperties', context: {{
+          element: target, moddleElement: target.businessObject, properties: {{ flowNodeRef: add }} }} }});
+        modeler.get('commandStack').execute('editor.multiCommand', commands);
+      }}
+      updateSpecificFields(element);
+    }}
+
+    // ---------------------------------------------------------------------
+    // Propriedades do processo (F2.12): aparecem sem seleção.
+    // ---------------------------------------------------------------------
+    function processBusinessObject() {{
+      try {{
+        const root = modeler.get('canvas').getRootElement().businessObject;
+        if (!root) return null;
+        if (root.$type === 'bpmn:Process') return root;
+        const participant = (root.participants || []).find(p => p.processRef);
+        return participant ? participant.processRef : null;
+      }} catch (e) {{
+        return null;
+      }}
+    }}
+
+    function populateProcessFields() {{
+      const process = processBusinessObject();
+      if (!process) return;
+      procId.value = process.id || '';
+      procName.value = process.name || '';
+      const docs = process.documentation || [];
+      procDoc.value = docs.length ? (docs[0].text || '') : '';
+    }}
+
+    function applyProcessName() {{
+      const process = processBusinessObject();
+      if (!process || (process.name || '') === procName.value) return;
+      modeler.get('modeling').updateModdleProperties(
+        modeler.get('canvas').getRootElement(), process, {{ name: procName.value || undefined }});
+    }}
+
+    function applyProcessDoc() {{
+      const process = processBusinessObject();
+      if (!process) return;
+      const text = procDoc.value.trim();
+      const docs = process.documentation || [];
+      if ((docs.length ? (docs[0].text || '') : '').trim() === text) return;
+      const documentation = text ? [modeler.get('moddle').create('bpmn:Documentation', {{ text: text }})] : [];
+      modeler.get('modeling').updateModdleProperties(
+        modeler.get('canvas').getRootElement(), process, {{ documentation: documentation }});
+    }}
+
+    // ---------------------------------------------------------------------
+    // Barra contextual (F2.2): só existe com seleção.
+    // ---------------------------------------------------------------------
+    function fillOf(element) {{
+      const di = diOf(element);
+      if (!di) return '';
+      let fill = '';
+      try {{
+        fill = di.get('bioc:fill') || di.get('color:background-color') || '';
+      }} catch (e) {{}}
+      return String(fill).toLowerCase();
+    }}
+
+    function updateColorPressed(selection) {{
+      const fills = selection.map(fillOf);
+      document.querySelectorAll('.color-dot').forEach(dot => {{
+        const swatch = (dot.getAttribute('data-fill') || '').toLowerCase();
+        const isDefault = swatch === '#ffffff';
+        const pressed = fills.length > 0 && fills.every(f => f === swatch || (isDefault && f === ''));
+        dot.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+      }});
+    }}
+
+    function updateContextToolbar() {{
+      const selection = getSelectedElements();
+      contextToolbar.hidden = selection.length === 0;
+      selectionInfoEl.textContent = selection.length === 0
+        ? 'Nenhuma seleção'
+        : (selection.length === 1 ? '1 elemento selecionado' : selection.length + ' elementos selecionados');
+      if (selection.length === 0) return;
+      ctxAlignGroup.hidden = selection.filter(el => !el.waypoints).length < 2;
+      const single = selection.length === 1 ? selection[0] : null;
+      ctxTypeGroup.hidden = !(single && fillTypeSelect(ctxType, single));
+      updateColorPressed(selection);
+    }}
+
+    ctxType.addEventListener('change', () => applyPropertyType(ctxType.value));
+
+    // ---------------------------------------------------------------------
+    // Modelos prontos (F2.14)
+    // ---------------------------------------------------------------------
+    function startFromTemplate(key) {{
+      const xml = TEMPLATES[key];
+      if (!xml) return;
+      if (isDirty && !confirm('Você possui alterações não salvas. Deseja descartá-las para criar um novo diagrama?')) {{
+        return;
+      }}
+      closeTemplatesDialog();
+      loadXML(xml, 'novo-processo.bpmn', null);
+    }}
+    document.querySelectorAll('.template-card').forEach(card => {{
+      card.addEventListener('click', () => startFromTemplate(card.getAttribute('data-template')));
+    }});
 
     // ---------------------------------------------------------------------
     // Validação dentro do editor: um subconjunto das regras de
@@ -1767,18 +3008,42 @@ def render_editor_html(vendor_dir=None):
       window.print();
     }}
 
-    btnAlignLeft.addEventListener('click', () => alignSelection('left'));
-    btnAlignMiddle.addEventListener('click', () => alignSelection('middle'));
-    btnDistributeH.addEventListener('click', () => distributeSelection('horizontal'));
+    // bpmn-js: 'left'/'center'/'right' alinham no eixo X (centro vertical = 'center');
+    // 'top'/'middle'/'bottom' alinham no eixo Y (centro horizontal = 'middle').
+    const ALIGN_BUTTONS = {{
+      'btn-align-left': 'left', 'btn-align-center': 'center', 'btn-align-right': 'right',
+      'btn-align-top': 'top', 'btn-align-middle': 'middle', 'btn-align-bottom': 'bottom'
+    }};
+    Object.keys(ALIGN_BUTTONS).forEach(id => {{
+      document.getElementById(id).addEventListener('click', () => alignSelection(ALIGN_BUTTONS[id]));
+    }});
+    document.getElementById('btn-distribute-h').addEventListener('click', () => distributeSelection('horizontal'));
+    document.getElementById('btn-distribute-v').addEventListener('click', () => distributeSelection('vertical'));
     btnExportPdf.addEventListener('click', exportPDF);
 
-    propName.addEventListener('change', applyPropertyName);
-    propDocumentation.addEventListener('change', applyPropertyDocumentation);
-    propType.addEventListener('change', applyPropertyType);
+    const rootTarget = () => modeler.get('canvas').getRootElement();
+    bindLiveField(propName, 'name', applyPropertyName);
+    bindLiveField(propDocumentation, 'documentation', applyPropertyDocumentation);
+    bindLiveField(propTimerValue, 'timer', applyTimer);
+    bindLiveField(propMessageName, 'message', applyMessageName);
+    bindLiveField(propErrorCode, 'error', applyErrorCode);
+    bindLiveField(propAssignee, 'assignee', applyAssignee);
+    bindLiveField(procName, 'process-name', applyProcessName, rootTarget);
+    bindLiveField(procDoc, 'process-doc', applyProcessDoc, rootTarget);
+    propTimerType.addEventListener('change', () => {{
+      const element = currentPropertyElement();
+      if (element) {{ endTypingSession(); applyTimer(element); }}
+    }});
+    propLane.addEventListener('change', () => {{
+      const element = currentPropertyElement();
+      if (element) {{ endTypingSession(); applyLane(element); }}
+    }});
+    propType.addEventListener('change', () => applyPropertyType());
     propCondition.addEventListener('change', applyPropertyCondition);
     propDefault.addEventListener('change', applyPropertyDefaultFlow);
     btnPropsToggle.addEventListener('click', () => {{
-      propertiesPanel.classList.toggle('hidden');
+      const hiddenNow = propertiesPanel.classList.toggle('hidden');
+      btnPropsToggle.setAttribute('aria-pressed', hiddenNow ? 'false' : 'true');
     }});
 
     // options.fromDisk: `xml` é o conteúdo lido do disco (arquivo/handle/fetch) e passa a ser a
@@ -1807,8 +3072,11 @@ def render_editor_html(vendor_dir=None):
         try {{ modeler.get('commandStack').clear(); }} catch (e) {{}}
         setFileState(name, handle, false);
         updateUndoRedoState();
+        applyOpeningZoom();
+        updateZoomIndicator();
         setTimeout(() => {{
-          try {{ modeler.get('canvas').zoom('fit-viewport'); }} catch (e) {{}}
+          applyOpeningZoom();
+          updateZoomIndicator();
         }}, 100);
         showToast(`Diagrama '${{name}}' carregado com sucesso.`);
       }} catch (err) {{
@@ -1935,11 +3203,16 @@ def render_editor_html(vendor_dir=None):
     }}
 
     // Novo Processo
+    // "Novo diagrama": abre a escolha de modelos (a confirmação de descartar
+    // alterações vem quando o modelo é escolhido, ver startFromTemplate).
     function newDiagram() {{
-      if (isDirty && !confirm('Você possui alterações não salvas. Deseja descartá-las para criar um novo diagrama?')) {{
-        return;
-      }}
-      loadXML(PRESETS['_blank'], 'novo-processo.bpmn', null);
+      openTemplatesDialog();
+    }}
+
+    // Tela inicial sem arquivo: diagrama em branco ao fundo e a escolha de modelos por cima.
+    async function showStartScreen() {{
+      await loadXML(PRESETS['_blank'], 'novo-processo.bpmn', null);
+      openTemplatesDialog();
     }}
 
     // Alinhamento Ortogonal 90° de Conexões
@@ -2102,6 +3375,12 @@ def render_editor_html(vendor_dir=None):
     const applyDiagramFont = applyAllElementFontStyles;
 
     function updateFontToolbarFromSelection(selection) {{
+      updateFontToolbarCore(selection);
+      btnFontBold.setAttribute('aria-pressed', btnFontBold.classList.contains('active') ? 'true' : 'false');
+      btnFontItalic.setAttribute('aria-pressed', btnFontItalic.classList.contains('active') ? 'true' : 'false');
+    }}
+
+    function updateFontToolbarCore(selection) {{
       if (!selection || selection.length === 0) {{
         fontSizeSelect.value = '12px';
         btnFontBold.classList.remove('active');
@@ -2208,6 +3487,240 @@ def render_editor_html(vendor_dir=None):
       }} catch (e) {{}}
     }}
 
+    // ---------------------------------------------------------------------
+    // Zoom: indicador ao vivo (F2.3), ajuste à seleção (F2.3), zoom de abertura
+    // legível (F2.15) e minimapa próprio (F2.15).
+    // ---------------------------------------------------------------------
+    const MIN_OPEN_ZOOM = 0.6;     // abaixo disso o texto deixa de ser legível
+    const FIT_PADDING = 40;        // folga ao redor do que se ajusta (px do diagrama)
+
+    function updateZoomIndicator() {{
+      try {{
+        zoomPercentEl.textContent = Math.round(modeler.get('canvas').zoom() * 100) + '%';
+      }} catch (e) {{}}
+    }}
+
+    function boundsOfElements(elements) {{
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const grow = (x, y) => {{
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }};
+      elements.forEach(el => {{
+        if (el.waypoints) {{
+          el.waypoints.forEach(p => grow(p.x, p.y));
+        }} else if (typeof el.x === 'number' && typeof el.width === 'number') {{
+          grow(el.x, el.y);
+          grow(el.x + el.width, el.y + el.height);
+        }}
+      }});
+      if (!isFinite(minX)) return null;
+      return {{ x: minX, y: minY, width: maxX - minX, height: maxY - minY }};
+    }}
+
+    // Enquadra `box` (coordenadas do diagrama) na área útil do canvas, sem passar de `maxScale`.
+    function fitBounds(box, maxScale) {{
+      const canvas = modeler.get('canvas');
+      const outer = canvas.viewbox().outer;
+      let scale = Math.min(
+        outer.width / Math.max(box.width + 2 * FIT_PADDING, 1),
+        outer.height / Math.max(box.height + 2 * FIT_PADDING, 1)
+      );
+      if (!isFinite(scale) || scale <= 0) scale = 1;
+      scale = Math.min(scale, maxScale || 1);
+      const viewW = outer.width / scale;
+      const viewH = outer.height / scale;
+      canvas.viewbox({{
+        x: box.x + box.width / 2 - viewW / 2,
+        y: box.y + box.height / 2 - viewH / 2,
+        width: viewW,
+        height: viewH
+      }});
+    }}
+
+    // "Ajustar à seleção": zoom para caber a seleção; sem seleção, ajusta ao diagrama.
+    function zoomToSelection() {{
+      try {{
+        const selection = getSelectedElements();
+        const box = selection.length ? boundsOfElements(selection) : modeler.get('canvas').viewbox().inner;
+        if (!box || (!box.width && !box.height)) return;
+        fitBounds(box, selection.length ? 1.5 : 1);
+      }} catch (e) {{
+        showError(e);
+      }}
+    }}
+
+    // Zoom ao abrir: cabe na tela quando dá para ler; senão usa o zoom mínimo legível
+    // e começa pelo início do fluxo (rolagem/minimapa levam ao resto).
+    function applyOpeningZoom() {{
+      try {{
+        const canvas = modeler.get('canvas');
+        const view = canvas.viewbox();
+        const inner = view.inner;
+        if (!inner || !inner.width || !inner.height) return;
+        const outer = view.outer;
+        const fit = Math.min(
+          outer.width / (inner.width + 2 * FIT_PADDING),
+          outer.height / (inner.height + 2 * FIT_PADDING)
+        );
+        if (fit >= MIN_OPEN_ZOOM) {{
+          fitBounds(inner, 1);
+          return;
+        }}
+        const viewW = outer.width / MIN_OPEN_ZOOM;
+        const viewH = outer.height / MIN_OPEN_ZOOM;
+        const starts = modeler.get('elementRegistry')
+          .filter(el => el.type === 'bpmn:StartEvent' && !el.labelTarget)
+          .sort((a, b) => a.x - b.x);
+        const minX = inner.x - FIT_PADDING;
+        const minY = inner.y - FIT_PADDING;
+        const maxX = inner.x + inner.width + FIT_PADDING - viewW;
+        const maxY = inner.y + inner.height + FIT_PADDING - viewH;
+        let x = starts.length ? starts[0].x - FIT_PADDING * 2 : minX;
+        let y = starts.length ? starts[0].y + starts[0].height / 2 - viewH / 2 : minY;
+        x = maxX < minX ? inner.x + inner.width / 2 - viewW / 2 : Math.min(Math.max(x, minX), maxX);
+        y = maxY < minY ? inner.y + inner.height / 2 - viewH / 2 : Math.min(Math.max(y, minY), maxY);
+        canvas.viewbox({{ x: x, y: y, width: viewW, height: viewH }});
+      }} catch (e) {{
+        zoomFit();
+      }}
+    }}
+
+    // Minimapa leve (SVG próprio, sem dependência): mostra o diagrama inteiro e o
+    // retângulo da área visível; clicar/arrastar leva o canvas até lá.
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    let minimapVisible = true;
+    let minimapFrame = 0;
+    let minimapSvg = null;
+    let minimapViewport = null;
+    let minimapContentKey = '';
+
+    function svgEl(name, attrs) {{
+      const el = document.createElementNS(SVG_NS, name);
+      Object.keys(attrs || {{}}).forEach(k => el.setAttribute(k, attrs[k]));
+      return el;
+    }}
+
+    function scheduleMinimap(rebuild) {{
+      if (rebuild) minimapContentKey = '';
+      if (minimapFrame || !minimapVisible) return;
+      minimapFrame = requestAnimationFrame(() => {{
+        minimapFrame = 0;
+        renderMinimap();
+      }});
+    }}
+
+    function renderMinimap() {{
+      if (!minimapVisible || !modeler) return;
+      try {{
+        const view = modeler.get('canvas').viewbox();
+        const inner = view.inner;
+        if (!inner || !isFinite(inner.width) || !inner.width || !inner.height) {{
+          minimapEl.textContent = '';
+          minimapSvg = null;
+          return;
+        }}
+        const pad = Math.max(inner.width, inner.height) * 0.06 + 10;
+        const world = [inner.x - pad, inner.y - pad, inner.width + 2 * pad, inner.height + 2 * pad];
+        const key = world.map(Math.round).join(',') + '|' + modeler.get('commandStack')._stackIdx;
+        if (!minimapSvg || key !== minimapContentKey) {{
+          minimapContentKey = key;
+          minimapEl.textContent = '';
+          minimapSvg = svgEl('svg', {{ viewBox: world.join(' '), preserveAspectRatio: 'xMidYMid meet', 'aria-hidden': 'true' }});
+          const layer = svgEl('g');
+          let drawn = 0;
+          modeler.get('elementRegistry').forEach(el => {{
+            if (el.labelTarget || drawn > 3000) return;
+            if (el.waypoints) {{
+              layer.appendChild(svgEl('polyline', {{
+                points: el.waypoints.map(p => p.x + ',' + p.y).join(' '),
+                fill: 'none', stroke: '#64748b', 'stroke-width': '1', 'vector-effect': 'non-scaling-stroke'
+              }}));
+              drawn++;
+            }} else if (typeof el.width === 'number' && typeof el.x === 'number') {{
+              const container = el.type === 'bpmn:Participant' || el.type === 'bpmn:Lane' || el.type === 'bpmn:SubProcess';
+              const attrs = {{
+                fill: container ? 'none' : (/Event$/.test(el.type) ? '#86efac' : (/Gateway$/.test(el.type) ? '#fde68a' : '#cbd5e1')),
+                stroke: container ? '#94a3b8' : '#475569',
+                'stroke-width': '1', 'vector-effect': 'non-scaling-stroke'
+              }};
+              if (/Event$/.test(el.type)) {{
+                attrs.cx = el.x + el.width / 2; attrs.cy = el.y + el.height / 2;
+                attrs.rx = el.width / 2; attrs.ry = el.height / 2;
+                layer.appendChild(svgEl('ellipse', attrs));
+              }} else {{
+                attrs.x = el.x; attrs.y = el.y; attrs.width = el.width; attrs.height = el.height;
+                layer.appendChild(svgEl('rect', attrs));
+              }}
+              drawn++;
+            }}
+          }});
+          minimapSvg.appendChild(layer);
+          minimapViewport = svgEl('rect', {{
+            fill: 'rgba(37,99,235,0.15)', stroke: '#2563eb', 'stroke-width': '2', 'vector-effect': 'non-scaling-stroke',
+            'data-role': 'viewport'
+          }});
+          minimapSvg.appendChild(minimapViewport);
+          minimapEl.appendChild(minimapSvg);
+        }}
+        minimapViewport.setAttribute('x', view.x);
+        minimapViewport.setAttribute('y', view.y);
+        minimapViewport.setAttribute('width', view.width);
+        minimapViewport.setAttribute('height', view.height);
+      }} catch (e) {{
+        console.warn('Minimapa indisponível:', e);
+      }}
+    }}
+
+    function minimapPointToDiagram(event) {{
+      const ctm = minimapSvg.getScreenCTM();
+      if (!ctm) return null;
+      const point = minimapSvg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      return point.matrixTransform(ctm.inverse());
+    }}
+
+    function centerViewOn(point) {{
+      const canvas = modeler.get('canvas');
+      const view = canvas.viewbox();
+      canvas.viewbox({{ x: point.x - view.width / 2, y: point.y - view.height / 2, width: view.width, height: view.height }});
+    }}
+
+    let minimapDragging = false;
+    minimapEl.addEventListener('pointerdown', (e) => {{
+      if (!minimapSvg) return;
+      minimapDragging = true;
+      try {{ minimapEl.setPointerCapture(e.pointerId); }} catch (err) {{}}
+      const point = minimapPointToDiagram(e);
+      if (point) centerViewOn(point);
+    }});
+    minimapEl.addEventListener('pointermove', (e) => {{
+      if (!minimapDragging || !minimapSvg) return;
+      const point = minimapPointToDiagram(e);
+      if (point) centerViewOn(point);
+    }});
+    ['pointerup', 'pointercancel'].forEach(name => {{
+      minimapEl.addEventListener(name, () => {{ minimapDragging = false; }});
+    }});
+
+    function toggleMinimap() {{
+      minimapVisible = !minimapVisible;
+      minimapEl.hidden = !minimapVisible;
+      document.getElementById('menu-minimap').setAttribute('aria-checked', minimapVisible ? 'true' : 'false');
+      if (minimapVisible) scheduleMinimap(true);
+    }}
+
+    modeler.on('canvas.viewbox.changed', () => {{
+      updateZoomIndicator();
+      scheduleMinimap(false);
+    }});
+    ['import.done', 'commandStack.changed', 'elements.changed'].forEach(name => {{
+      modeler.on(name, () => scheduleMinimap(true));
+    }});
+
     function zoomReset() {{
       try {{
         modeler.get('canvas').zoom(1.0);
@@ -2300,21 +3813,37 @@ def render_editor_html(vendor_dir=None):
     // Eventos da Toolbar
     document.getElementById('btn-open').addEventListener('click', openFile);
     document.getElementById('btn-save').addEventListener('click', saveFile);
+    document.getElementById('menu-save').addEventListener('click', saveFile);
     document.getElementById('btn-save-as').addEventListener('click', saveFileAs);
     document.getElementById('btn-new').addEventListener('click', newDiagram);
     btnUndo.addEventListener('click', undoAction);
     btnRedo.addEventListener('click', redoAction);
+    menuUndo.addEventListener('click', undoAction);
+    menuRedo.addEventListener('click', redoAction);
     document.getElementById('btn-route-90').addEventListener('click', layoutOrthogonalRoute);
     document.getElementById('btn-search').addEventListener('click', toggleSearch);
     document.getElementById('btn-zoom-out').addEventListener('click', zoomOut);
     document.getElementById('btn-zoom-in').addEventListener('click', zoomIn);
+    document.getElementById('menu-zoom-out').addEventListener('click', zoomOut);
+    document.getElementById('menu-zoom-in').addEventListener('click', zoomIn);
     document.getElementById('btn-zoom-fit').addEventListener('click', zoomFit);
     document.getElementById('btn-zoom-reset').addEventListener('click', zoomReset);
+    document.getElementById('btn-zoom-selection').addEventListener('click', zoomToSelection);
+    document.getElementById('menu-minimap').addEventListener('click', toggleMinimap);
+    document.getElementById('menu-shortcuts').addEventListener('click', () => openShortcuts());
     document.getElementById('btn-export-svg').addEventListener('click', exportSVG);
     document.getElementById('btn-export-png').addEventListener('click', exportPNG);
     fontSizeSelect.addEventListener('change', (e) => setFontSize(e.target.value));
     btnFontBold.addEventListener('click', toggleBold);
     btnFontItalic.addEventListener('click', toggleItalic);
+
+    // Telas estreitas começam com o painel de propriedades recolhido (F2.5).
+    if (window.innerWidth < 900) {{
+      propertiesPanel.classList.add('hidden');
+      btnPropsToggle.setAttribute('aria-pressed', 'false');
+    }}
+    updateZoomIndicator();
+    updateContextToolbar();
 
     // Eventos de Cores
     document.querySelectorAll('.color-dot').forEach(dot => {{
@@ -2381,17 +3910,6 @@ def render_editor_html(vendor_dir=None):
     // segundo listener executaria a ação duas vezes, e ainda desfaria o canvas
     // quando o foco está num campo de texto (o navegador deve desfazer no campo).
     // Aqui ficam só Ctrl+S, Ctrl+O, Ctrl+B e Ctrl+I, respeitando o foco.
-    function isTextEditingTarget(el) {{
-      if (!el || !el.tagName) return false;
-      const tag = el.tagName.toUpperCase();
-      if (tag === 'TEXTAREA') return true;
-      if (tag === 'INPUT') {{
-        const type = (el.getAttribute('type') || 'text').toLowerCase();
-        return ['button', 'checkbox', 'radio', 'submit', 'reset', 'file', 'range', 'color', 'image'].indexOf(type) === -1;
-      }}
-      return !!el.isContentEditable;
-    }}
-
     window.addEventListener('keydown', (e) => {{
       if (e.defaultPrevented || !(e.ctrlKey || e.metaKey) || e.altKey || !e.key) return;
       const key = e.key.toLowerCase();
@@ -2492,7 +4010,7 @@ def render_editor_html(vendor_dir=None):
         }}
 
         // Se não há diagrama embutido e fetch falhou, inicializa novo diagrama limpo para a interface não ficar em branco
-        newDiagram();
+        await loadXML(PRESETS['_blank'], 'novo-processo.bpmn', null);
         showToast(`Arquivo '${{fileParam}}' configurado. Use '📂 Abrir' ou arraste o arquivo para carregar.`);
         return;
       }}
@@ -2503,8 +4021,9 @@ def render_editor_html(vendor_dir=None):
         return;
       }}
 
-      // 3. Fallback: NUNCA apontar para diagrama de exemplo da skill por padrão. Inicia em branco.
-      newDiagram();
+      // 3. Fallback: NUNCA apontar para diagrama de exemplo da skill por padrão. Inicia em branco
+      //    e oferece os modelos prontos (tela inicial).
+      await showStartScreen();
     }}
 
     initEditor();
