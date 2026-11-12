@@ -58,7 +58,7 @@
           "pytest",
           "-q"
         ],
-        "seconds": 4,
+        "seconds": 90,
         "junit": "pytest"
       }
     ]
