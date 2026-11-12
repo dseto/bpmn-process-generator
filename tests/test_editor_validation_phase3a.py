@@ -771,3 +771,53 @@ def test_the_fix_dialog_is_labelled_and_traps_keyboard_focus(live):
 def test_the_editor_version_reflects_phase_3a():
     parts = tuple(int(part) for part in generate_editor_html.EDITOR_VERSION.split("."))
     assert parts >= (1, 4, 0)
+
+
+# ---------------------------------------------------------------------------
+# Critic gaps of iteration 1: readable messages, parity on mutated templates
+# ---------------------------------------------------------------------------
+
+def test_finding_messages_wrap_instead_of_being_cut_off(live):
+    page = live
+    load_xml(page, (ROOT / "references/example-broken.bpmn").read_text(encoding="utf-8"), "broken.bpmn")
+    page.click("#btn-validate")
+    overflowing = page.evaluate(
+        "Array.from(document.querySelectorAll('.validation-finding'))"
+        ".filter(el => el.scrollWidth > el.clientWidth + 1).length")
+    assert page.locator(".validation-finding").count() > 0
+    assert overflowing == 0
+
+
+def _swap_tag(xml, old, new):
+    return re.sub(rf"(</?)bpmn:{old}\b", rf"\1bpmn:{new}", xml)
+
+
+TEMPLATE_MUTATIONS = {
+    "no-start-event": lambda xml: _swap_tag(xml, "startEvent", "userTask"),
+    "no-end-event": lambda xml: _swap_tag(xml, "endEvent", "userTask"),
+    "lane-duplicate": lambda xml: xml.replace(
+        "<bpmn:flowNodeRef>Task_TratarSolicitacao</bpmn:flowNodeRef>",
+        "<bpmn:flowNodeRef>Task_TratarSolicitacao</bpmn:flowNodeRef>"
+        "<bpmn:flowNodeRef>Task_AbrirSolicitacao</bpmn:flowNodeRef>", 1),
+    "gateway-to-parallel": lambda xml: _swap_tag(xml, "exclusiveGateway", "parallelGateway"),
+}
+
+
+@pytest.mark.parametrize("mutation, template", [
+    ("no-start-event", "linear"),
+    ("no-end-event", "linear"),
+    ("no-start-event", "decision"),
+    ("gateway-to-parallel", "decision"),
+    ("lane-duplicate", "lanes"),
+])
+def test_the_editor_agrees_with_the_linter_on_mutated_templates(live, tmp_path, mutation, template):
+    page = live
+    xml = TEMPLATE_MUTATIONS[mutation]((ROOT / f"assets/templates/{template}.bpmn").read_text(encoding="utf-8"))
+    target = tmp_path / f"{template}-{mutation}.bpmn"
+    target.write_text(xml, encoding="utf-8")
+    load_xml(page, xml, target.name)
+    ported = set(generate_editor_html.PORTED_RULES)
+    expected = {(f.rule, f.element) for f in lint_rules.run_rules(ET.parse(target)) if f.rule in ported}
+    assert expected, "the mutation must make the linter report something"
+    actual = editor_findings(page)
+    assert actual == expected, (sorted(actual - expected, key=str), sorted(expected - actual, key=str))

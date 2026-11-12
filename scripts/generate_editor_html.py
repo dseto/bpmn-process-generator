@@ -806,6 +806,8 @@ def render_editor_html(vendor_dir=None):
     line-height: 1.4;
     cursor: pointer;
     color: #0f172a;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }}
   .validation-finding:hover {{
     background: #f1f5f9;
