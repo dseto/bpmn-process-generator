@@ -36,7 +36,7 @@ CDN_BASE = "https://unpkg.com/bpmn-js@17.0.0/dist"
 # changes: `bpmn_tool.copy_editor_if_needed` compares it against the copy already
 # in the project and refreshes an older, untouched one (an edited copy is kept
 # and reported instead -- see `was_edited_locally`).
-EDITOR_VERSION = "1.3.0"
+EDITOR_VERSION = "1.3.1"
 
 PRESET_FILES = {
     "06-bus-boarding-process.bpmn": ROOT_DIR / "tests" / "06-bus-boarding-process.bpmn",
@@ -881,7 +881,8 @@ def render_editor_html(vendor_dir=None):
     z-index: 3000;
     opacity: 0;
     transform: translateY(10px);
-    transition: all 0.2s ease-in-out;
+    /* só opacidade/transform: animar `bottom` faria o aviso "voar" sobre o minimapa */
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
     pointer-events: none;
   }}
   #toast.show {{
@@ -1045,7 +1046,8 @@ def render_editor_html(vendor_dir=None):
   #minimap {{
     position: absolute;
     right: 12px;
-    bottom: 12px;
+    /* acima da marca "bpmn.io" (canto inferior direito), que deve ficar visível */
+    bottom: 60px;
     width: 200px;
     height: 130px;
     z-index: 50;
@@ -1272,7 +1274,7 @@ def render_editor_html(vendor_dir=None):
   <aside id="properties-panel">
     <h2>Propriedades</h2>
     <div id="prop-empty">
-      <p class="prop-hint">Selecione um elemento no diagrama para editar nome, documentação, tipo e — em conexões — a condição da decisão.</p>
+      <p class="prop-hint" id="prop-hint">Selecione um elemento no diagrama para editar nome, documentação, tipo e — em conexões — a condição da decisão.</p>
       <div id="prop-process" class="prop-process">
         <h3>Processo</h3>
         <div class="prop-field">
@@ -1516,8 +1518,19 @@ def render_editor_html(vendor_dir=None):
   let draftRecoveryPending = false;
   const noticeBanner = document.getElementById('notice-banner');
 
+  // O aviso fica no canto inferior direito, mas acima do minimapa (quando visível)
+  // para nunca cobrir a miniatura de navegação.
+  function placeToast() {{
+    const mini = document.getElementById('minimap');
+    const rect = mini && !mini.hidden ? mini.getBoundingClientRect() : null;
+    toast.style.bottom = rect && rect.height > 0
+      ? Math.round(window.innerHeight - rect.top + 12) + 'px'
+      : '';
+  }}
+
   function showToast(msg) {{
     toast.textContent = msg;
+    placeToast();
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 2800);
   }}
@@ -2301,11 +2314,19 @@ def render_editor_html(vendor_dir=None):
       return expression ? (expression.body || '') : '';
     }}
 
+    const PROP_HINT_DEFAULT = document.getElementById('prop-hint') ? document.getElementById('prop-hint').textContent : '';
+
     function updatePropertiesPanel(selection) {{
       const element = (selection && selection.length === 1) ? selection[0] : null;
       const isRealElement = !!element && element.type !== 'bpmn:Process' && !element.labelTarget;
 
       propEmpty.style.display = isRealElement ? 'none' : 'block';
+      const hint = document.getElementById('prop-hint');
+      if (hint) {{
+        hint.textContent = (selection && selection.length > 1)
+          ? selection.length + ' elementos selecionados. Use a barra acima do diagrama para cor, fonte e alinhamento; selecione um só elemento para editar as propriedades.'
+          : PROP_HINT_DEFAULT;
+      }}
       propBody.classList.toggle('hidden', !isRealElement);
       // Sem seleção: propriedades do processo (F2.12).
       propProcess.hidden = !!(selection && selection.length) || !processBusinessObject();
@@ -2505,11 +2526,14 @@ def render_editor_html(vendor_dir=None):
     // resources) pelo `modeling`, então desfaz/refaz e salvar/reabrir funcionam.
     // ---------------------------------------------------------------------
     const TIMER_KINDS = ['timeDate', 'timeDuration', 'timeCycle'];
-    const ASSIGNABLE_TYPES = {{
-      'bpmn:UserTask': 'bpmn:HumanPerformer',
-      'bpmn:ManualTask': 'bpmn:HumanPerformer',
-      'bpmn:Task': 'bpmn:Performer'
-    }};
+    // Qualquer atividade (tarefas de todos os tipos, subprocesso, atividade
+    // chamada) aceita responsável: humanas usam HumanPerformer, as demais Performer.
+    function assigneeRoleType(element) {{
+      const bo = element && !element.waypoints && element.businessObject;
+      if (!bo || !bo.$instanceOf || !bo.$instanceOf('bpmn:Activity')) return null;
+      return (element.type === 'bpmn:UserTask' || element.type === 'bpmn:ManualTask')
+        ? 'bpmn:HumanPerformer' : 'bpmn:Performer';
+    }}
 
     function eventDefinitionOf(element, type) {{
       const defs = (element && element.businessObject && element.businessObject.eventDefinitions) || [];
@@ -2571,7 +2595,7 @@ def render_editor_html(vendor_dir=None):
       const error = element && eventDefinitionOf(element, 'bpmn:ErrorEventDefinition');
       propErrorFields.hidden = !error;
       if (error) propErrorCode.value = error.errorRef ? (error.errorRef.errorCode || '') : '';
-      const assignable = !!element && !!ASSIGNABLE_TYPES[element.type];
+      const assignable = !!assigneeRoleType(element);
       propTaskFields.hidden = !assignable;
       if (assignable) propAssignee.value = assigneeOf(element);
 
@@ -2654,7 +2678,7 @@ def render_editor_html(vendor_dir=None):
     }}
 
     function applyAssignee(element) {{
-      const roleType = ASSIGNABLE_TYPES[element.type];
+      const roleType = assigneeRoleType(element);
       if (!roleType) return;
       const value = propAssignee.value.trim();
       if (assigneeOf(element) === value) return;
