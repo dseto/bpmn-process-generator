@@ -36,7 +36,7 @@ CDN_BASE = "https://unpkg.com/bpmn-js@17.0.0/dist"
 # changes: `bpmn_tool.copy_editor_if_needed` compares it against the copy already
 # in the project and refreshes an older, untouched one (an edited copy is kept
 # and reported instead -- see `was_edited_locally`).
-EDITOR_VERSION = "1.4.0"
+EDITOR_VERSION = "1.5.0"
 
 # ---------------------------------------------------------------------------
 # Validation rules (Fase 3A, F3.1). `scripts/lint_rules.py` is the authority;
@@ -398,6 +398,1711 @@ for _key, _spec in TEMPLATE_SPECS.items():
         rebuild_templates()
     templates_data[_key] = _path.read_text(encoding="utf-8")
 templates_json = json.dumps(templates_data, ensure_ascii=False)
+
+# ---------------------------------------------------------------------------
+# Fase 3B: o que a skill faz em Python, portado para JS (F3.5 e F3.6).
+#
+# `bpmn_build.py` (spec -> XML), `bpmn_tool.py extract` (XML -> spec) e
+# `bpmn_tool.py layout` (`build_graph` / `compute_diagram`) continuam sendo a
+# autoridade: este bloco os reimplementa, passo a passo e com os mesmos nomes e
+# constantes, para o editor (que roda so no navegador) produzir o MESMO resultado.
+# tests/test_editor_integration_phase3b.py compara os dois lados nos exemplos
+# do repositorio. Fica numa string simples (sem f-string) para o JS nao precisar
+# de chaves duplicadas; entra na pagina pelo marcador {skill_port_js}.
+# ---------------------------------------------------------------------------
+SKILL_PORT_JS = r"""
+  // =====================================================================
+  // Porte da skill para o navegador (Fase 3B)
+  // =====================================================================
+  const SkillPort = (function () {
+    'use strict';
+
+    const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
+    const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
+    const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC';
+    const DI_NS = 'http://www.omg.org/spec/DD/20100524/DI';
+    const XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance';
+
+    // ---- constantes de bpmn_tool.py ------------------------------------
+    const FLOW_NODE_TAGS = [
+      'startEvent', 'endEvent', 'task', 'userTask', 'serviceTask', 'sendTask', 'receiveTask',
+      'manualTask', 'scriptTask', 'businessRuleTask', 'exclusiveGateway', 'parallelGateway',
+      'inclusiveGateway', 'eventBasedGateway', 'complexGateway', 'subProcess', 'callActivity',
+      'transaction', 'adHocSubProcess', 'intermediateCatchEvent', 'intermediateThrowEvent',
+      'boundaryEvent'
+    ];
+    const SIZES = {
+      startEvent: [36, 36], endEvent: [36, 36], intermediateCatchEvent: [36, 36],
+      intermediateThrowEvent: [36, 36], boundaryEvent: [36, 36],
+      exclusiveGateway: [50, 50], parallelGateway: [50, 50], inclusiveGateway: [50, 50],
+      eventBasedGateway: [50, 50], complexGateway: [50, 50]
+    };
+    const DEFAULT_SIZE = [100, 80];
+    const COL_SPACING = 150;
+    const ROW_SPACING = 120;
+    const BASE_X = 160;
+    const BASE_Y = 120;
+    const LANE_SLOTS = 3;
+    const LANE_PADDING = 40;
+    const BACK_EDGE_DROP = 60;
+
+    const PREFERRED_TYPE_ALIAS = {
+      startEvent: 'start', endEvent: 'end', exclusiveGateway: 'xor', parallelGateway: 'and',
+      inclusiveGateway: 'or', eventBasedGateway: 'eventGateway',
+      intermediateCatchEvent: 'catch', intermediateThrowEvent: 'throw', boundaryEvent: 'boundary'
+    };
+
+    // ---- constantes de bpmn_build.py -----------------------------------
+    const TYPE_ALIASES = new Map(Object.entries({
+      start: 'startEvent', end: 'endEvent', task: 'task', userTask: 'userTask',
+      serviceTask: 'serviceTask', sendTask: 'sendTask', receiveTask: 'receiveTask',
+      manualTask: 'manualTask', scriptTask: 'scriptTask', businessRuleTask: 'businessRuleTask',
+      xor: 'exclusiveGateway', and: 'parallelGateway', or: 'inclusiveGateway',
+      eventGateway: 'eventBasedGateway', catch: 'intermediateCatchEvent',
+      throw: 'intermediateThrowEvent', boundary: 'boundaryEvent', subProcess: 'subProcess',
+      callActivity: 'callActivity', startEvent: 'startEvent', endEvent: 'endEvent',
+      exclusiveGateway: 'exclusiveGateway', parallelGateway: 'parallelGateway',
+      inclusiveGateway: 'inclusiveGateway', eventBasedGateway: 'eventBasedGateway',
+      intermediateCatchEvent: 'intermediateCatchEvent',
+      intermediateThrowEvent: 'intermediateThrowEvent', boundaryEvent: 'boundaryEvent'
+    }));
+    const EVENT_DEFINITIONS = new Map(Object.entries({
+      message: 'messageEventDefinition', timer: 'timerEventDefinition',
+      error: 'errorEventDefinition', signal: 'signalEventDefinition',
+      escalation: 'escalationEventDefinition', conditional: 'conditionalEventDefinition',
+      compensate: 'compensateEventDefinition', link: 'linkEventDefinition',
+      terminate: 'terminateEventDefinition'
+    }));
+    const EVENT_TAGS = new Set(['startEvent', 'endEvent', 'boundaryEvent',
+      'intermediateCatchEvent', 'intermediateThrowEvent']);
+    const ACTIVITY_TAGS = new Set(['task', 'userTask', 'serviceTask', 'sendTask', 'receiveTask',
+      'manualTask', 'scriptTask', 'businessRuleTask', 'subProcess', 'callActivity']);
+    const GATEWAY_TAGS = new Set(['exclusiveGateway', 'parallelGateway', 'inclusiveGateway',
+      'eventBasedGateway', 'complexGateway']);
+    const ID_PREFIXES = {
+      startEvent: 'Start', endEvent: 'End', exclusiveGateway: 'Gateway', parallelGateway: 'Gateway',
+      inclusiveGateway: 'Gateway', eventBasedGateway: 'Gateway', intermediateCatchEvent: 'Event',
+      intermediateThrowEvent: 'Event', boundaryEvent: 'Event', subProcess: 'SubProcess',
+      callActivity: 'Activity'
+    };
+    const DEFAULT_ID_PREFIX = 'Task';
+
+    // ---- erros ----------------------------------------------------------
+    // `code` e estavel (os testes casam com a mensagem do SpecError do Python);
+    // `message` e o texto em pt-BR mostrado ao usuario.
+    class SpecError extends Error {
+      constructor(code, message) {
+        super(message);
+        this.name = 'SpecError';
+        this.code = code;
+      }
+    }
+    class ExtractError extends Error {
+      constructor(code, message) {
+        super(message);
+        this.name = 'ExtractError';
+        this.code = code;
+      }
+    }
+
+    // ---- helpers com a semantica do Python ------------------------------
+    function truthy(value) {
+      if (value === null || value === undefined || value === false || value === 0 || value === '') return false;
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === 'object') return Object.keys(value).length > 0;
+      return true;
+    }
+
+    function isPlainObject(value) {
+      return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function typeName(value) {
+      if (value === null || value === undefined) return 'nulo';
+      if (Array.isArray(value)) return 'lista';
+      if (typeof value === 'object') return 'objeto';
+      if (typeof value === 'string') return 'texto';
+      if (typeof value === 'number') return 'número';
+      return 'booleano';
+    }
+
+    function shown(value) {
+      return value === undefined || value === null ? '(ausente)' : String(value);
+    }
+
+    // round() do Python arredonda a metade para o par (banker's rounding).
+    function pyRound(x) {
+      const floor = Math.floor(x);
+      const diff = x - floor;
+      if (diff < 0.5) return floor;
+      if (diff > 0.5) return floor + 1;
+      return floor % 2 === 0 ? floor : floor + 1;
+    }
+
+    function inOrder(list) {
+      return Array.from(new Set(list));
+    }
+
+    // =====================================================================
+    // Layout: build_graph + compute_diagram
+    // =====================================================================
+    function sizeOf(entry) {
+      if (entry.size) return entry.size;
+      return SIZES[entry.tag] || DEFAULT_SIZE;
+    }
+
+    // input: { nodes: [{id, tag, size?}], flows: [{id, src, tgt}], lanes: null | [{id, refs: [id]}] }
+    function buildGraph(input) {
+      const nodes = new Map();
+      (input.nodes || []).forEach(entry => {
+        if (!entry.id) return;
+        nodes.set(entry.id, { tag: entry.tag, size: entry.size, inEdges: [], outEdges: [] });
+      });
+      const edges = [];
+      (input.flows || []).forEach(flow => {
+        if (!flow.id || !flow.src || !flow.tgt) return;
+        edges.push([flow.id, flow.src, flow.tgt]);
+        if (nodes.has(flow.src)) nodes.get(flow.src).outEdges.push([flow.id, flow.tgt]);
+        if (nodes.has(flow.tgt)) nodes.get(flow.tgt).inEdges.push([flow.id, flow.src]);
+      });
+      return { nodes: nodes, edges: edges };
+    }
+
+    // Ordem topologica (Kahn). Os sucessores entram na fila na ordem em que
+    // aparecem: o Python itera um `set`, cuja ordem muda a cada execucao
+    // (PYTHONHASHSEED); a ordem de primeira aparicao e uma das ordens possiveis e e estavel.
+    function topoOrder(nodes) {
+      const ids = Array.from(nodes.keys());
+      const succ = new Map();
+      const pred = new Map();
+      ids.forEach(id => {
+        const node = nodes.get(id);
+        succ.set(id, node.outEdges.map(e => e[1]).filter(t => nodes.has(t)));
+        pred.set(id, node.inEdges.map(e => e[1]).filter(s => nodes.has(s)));
+      });
+      const remaining = new Map();
+      ids.forEach(id => remaining.set(id, new Set(pred.get(id)).size));
+      const order = [];
+      const seen = new Set();
+      const queue = ids.filter(id => remaining.get(id) === 0);
+      let qi = 0;
+      while (qi < queue.length) {
+        const id = queue[qi];
+        qi += 1;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        order.push(id);
+        inOrder(succ.get(id)).forEach(t => {
+          if (seen.has(t)) return;
+          remaining.set(t, remaining.get(t) - 1);
+          if (remaining.get(t) <= 0) queue.push(t);
+        });
+      }
+      if (order.length < ids.length) {
+        // Ciclo: o que sobrou entra por "menos predecessores ainda nao resolvidos".
+        const rest = ids.filter(id => !seen.has(id));
+        while (rest.length) {
+          const key = new Map();
+          rest.forEach(id => key.set(id, inOrder(pred.get(id)).filter(p => !seen.has(p)).length));
+          rest.sort((a, b) => key.get(a) - key.get(b));
+          const id = rest.shift();
+          seen.add(id);
+          order.push(id);
+        }
+      }
+      return { order: order, pred: pred, succ: succ };
+    }
+
+    function assignColumns(order, pred) {
+      const col = new Map();
+      order.forEach(id => {
+        const placed = inOrder(pred.get(id)).filter(p => col.has(p));
+        col.set(id, placed.length ? 1 + Math.max.apply(null, placed.map(p => col.get(p))) : 0);
+      });
+      return col;
+    }
+
+    function assignRawRows(nodes, order, starts) {
+      const rawRow = new Map();
+      starts.forEach((id, i) => rawRow.set(id, i - (starts.length - 1) / 2));
+      order.forEach(id => {
+        if (!rawRow.has(id)) return;
+        const row0 = rawRow.get(id);
+        const targets = [];
+        nodes.get(id).outEdges.forEach(edge => {
+          const t = edge[1];
+          if (nodes.has(t) && targets.indexOf(t) < 0) targets.push(t);
+        });
+        targets.forEach((t, i) => {
+          if (rawRow.has(t)) return;
+          rawRow.set(t, row0 + (targets.length === 1 ? 0 : (i - (targets.length - 1) / 2)));
+        });
+      });
+      nodes.forEach((_node, id) => { if (!rawRow.has(id)) rawRow.set(id, 0); });
+      return rawRow;
+    }
+
+    function resolveCollisions(order, col, finalRow) {
+      const occupied = new Set();
+      const positions = new Map();
+      order.forEach(id => {
+        const c = col.get(id);
+        let r = finalRow.get(id);
+        let key = c + ',' + pyRound(r * 2);
+        if (occupied.has(key)) {
+          let k = 1;
+          let moved = false;
+          while (!moved) {
+            [k, -k].forEach(delta => {
+              if (moved) return;
+              const candidate = r + delta;
+              const candidateKey = c + ',' + pyRound(candidate * 2);
+              if (!occupied.has(candidateKey)) {
+                r = candidate;
+                key = candidateKey;
+                moved = true;
+              }
+            });
+            if (!moved) k += 1;
+          }
+        }
+        occupied.add(key);
+        positions.set(id, [c, r]);
+      });
+      return positions;
+    }
+
+    function edgeWaypoints(srcBounds, tgtBounds, srcCol, tgtCol) {
+      const [sx, sy, sw, sh] = srcBounds;
+      const [tx, ty, tw, th] = tgtBounds;
+      if (tgtCol <= srcCol) {
+        // Laco de retrabalho: desce, atravessa por baixo e sobe.
+        const start = [sx + sw / 2, sy + sh];
+        const end = [tx + tw / 2, ty + th];
+        const dropY = Math.max(sy + sh, ty + th) + BACK_EDGE_DROP;
+        return [start, [start[0], dropY], [end[0], dropY], end];
+      }
+      const start = [sx + sw, sy + sh / 2];
+      const end = [tx, ty + th / 2];
+      if (Math.abs(start[1] - end[1]) < 1) return [start, end];
+      const midX = (start[0] + end[0]) / 2;
+      return [start, [midX, start[1]], [midX, end[1]], end];
+    }
+
+    // Resultado em inteiros (int() do Python trunca em direcao a zero):
+    //   { lanes: [{id, x, y, width, height}],
+    //     shapes: [{id, tag, x, y, width, height}],
+    //     edges: [{id, waypoints: [{x, y}]}] }
+    function computeLayout(input) {
+      const graph = buildGraph(input);
+      const nodes = graph.nodes;
+      const result = { lanes: [], shapes: [], edges: [] };
+      if (nodes.size === 0) return result;
+
+      const topo = topoOrder(nodes);
+      const order = topo.order;
+      const col = assignColumns(order, topo.pred);
+      const starts = order.filter(id => nodes.get(id).tag === 'startEvent');
+      const rawRow = assignRawRows(nodes, order, starts);
+
+      const laneOf = input.lanes ? new Map() : null;
+      if (laneOf) {
+        input.lanes.forEach((lane, i) => (lane.refs || []).forEach(ref => laneOf.set(String(ref).trim(), i)));
+      }
+      const finalRow = new Map();
+      const halfSpan = (LANE_SLOTS - 1) / 2;
+      nodes.forEach((_node, id) => {
+        if (!laneOf) {
+          finalRow.set(id, rawRow.get(id));
+          return;
+        }
+        const r = Math.max(-halfSpan, Math.min(halfSpan, rawRow.get(id)));
+        finalRow.set(id, (laneOf.has(id) ? laneOf.get(id) : 0) * LANE_SLOTS + halfSpan + r);
+      });
+
+      const positions = resolveCollisions(order, col, finalRow);
+      const bounds = new Map();
+      positions.forEach((position, id) => {
+        const node = nodes.get(id);
+        const size = sizeOf(node);
+        const x = BASE_X + position[0] * COL_SPACING;
+        const y = BASE_Y + position[1] * ROW_SPACING - size[1] / 2;
+        bounds.set(id, [x, y, size[0], size[1]]);
+      });
+
+      if (laneOf) {
+        let maxCol = 0;
+        positions.forEach(position => { if (position[0] > maxCol) maxCol = position[0]; });
+        const width = BASE_X + (maxCol + 1) * COL_SPACING + LANE_PADDING;
+        const height = LANE_SLOTS * ROW_SPACING;
+        input.lanes.forEach((lane, i) => {
+          const top = BASE_Y - ROW_SPACING / 2 + i * height;
+          result.lanes.push({ id: lane.id, x: 0, y: Math.trunc(top),
+            width: Math.trunc(width), height: Math.trunc(height) });
+        });
+      }
+
+      positions.forEach((_position, id) => {
+        const b = bounds.get(id);
+        result.shapes.push({ id: id, tag: nodes.get(id).tag,
+          x: Math.trunc(b[0]), y: Math.trunc(b[1]), width: b[2], height: b[3] });
+      });
+
+      graph.edges.forEach(edge => {
+        const id = edge[0], src = edge[1], tgt = edge[2];
+        if (!bounds.has(src) || !bounds.has(tgt)) return;
+        const points = edgeWaypoints(bounds.get(src), bounds.get(tgt), col.get(src), col.get(tgt));
+        result.edges.push({ id: id, waypoints: points.map(p => ({ x: Math.trunc(p[0]), y: Math.trunc(p[1]) })) });
+      });
+      return result;
+    }
+
+    // =====================================================================
+    // XML minimo (mesma formatacao do ElementTree + ET.indent)
+    // =====================================================================
+    function escapeText(value) {
+      return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escapeAttr(value) {
+      return escapeText(value).replace(/"/g, '&quot;').replace(/\r/g, '&#13;')
+        .replace(/\n/g, '&#10;').replace(/\t/g, '&#09;');
+    }
+    function xnode(tag, attrs, children, text) {
+      return { tag: tag, attrs: attrs || [], children: children || [], text: text };
+    }
+    function serialize(node, depth) {
+      const pad = '  '.repeat(depth);
+      const attrs = node.attrs.map(a => ' ' + a[0] + '="' + escapeAttr(a[1]) + '"').join('');
+      if (node.children.length) {
+        return pad + '<' + node.tag + attrs + '>\n'
+          + node.children.map(child => serialize(child, depth + 1)).join('')
+          + pad + '</' + node.tag + '>\n';
+      }
+      if (node.text !== undefined && node.text !== null && node.text !== '') {
+        return pad + '<' + node.tag + attrs + '>' + escapeText(node.text) + '</' + node.tag + '>\n';
+      }
+      return pad + '<' + node.tag + attrs + ' />\n';
+    }
+
+    // =====================================================================
+    // Spec -> modelo (bpmn_build._normalise_* e build_tree)
+    // =====================================================================
+    const COMBINING = /[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]/g;
+
+    function stripAccents(text) {
+      return String(text).normalize('NFKD').replace(COMBINING, '');
+    }
+
+    // 'Conferir nota fiscal' -> 'ConferirNotaFiscal'; so a 1a letra de cada pedaco sobe.
+    function pascalCase(text) {
+      return stripAccents(text).split(/[^0-9A-Za-z]+/).filter(Boolean)
+        .map(token => token.charAt(0).toUpperCase() + token.slice(1)).join('');
+    }
+
+    function uniqueId(candidate, taken) {
+      if (!taken.has(candidate)) {
+        taken.add(candidate);
+        return candidate;
+      }
+      let n = 2;
+      while (taken.has(candidate + '_' + n)) n += 1;
+      const unique = candidate + '_' + n;
+      taken.add(unique);
+      return unique;
+    }
+
+    function requireText(value, what) {
+      if (truthy(value) && typeof value !== 'string') {
+        throw new SpecError('field-type', what + ' precisa ser um texto (recebido: ' + typeName(value) + ').');
+      }
+    }
+
+    function sortedKeys(map) {
+      return Array.from(map.keys()).sort().join(', ');
+    }
+
+    function checkBoundaryHosts(resolved) {
+      const tagOfSpecId = new Map(resolved.map(r => [r.specId, r.tag]));
+      resolved.forEach(r => {
+        if (r.tag !== 'boundaryEvent') return;
+        const host = r.node.attachedTo;
+        if (!truthy(host)) {
+          throw new SpecError('boundary-no-host',
+            "O evento de borda '" + r.specId + "' precisa de 'attachedTo' com a atividade a que se prende.");
+        }
+        if (!tagOfSpecId.has(host)) {
+          throw new SpecError('boundary-unknown-host',
+            "O evento de borda '" + r.specId + "' está preso a um nó que não existe: '" + shown(host) + "'.");
+        }
+        if (!ACTIVITY_TAGS.has(tagOfSpecId.get(host))) {
+          throw new SpecError('boundary-bad-host',
+            "O evento de borda '" + r.specId + "' está preso a '" + host + "', que é um '"
+            + tagOfSpecId.get(host) + "' — eventos de borda só se prendem a atividades.");
+        }
+      });
+    }
+
+    function normaliseNodes(spec) {
+      const nodes = spec.nodes;
+      if (!Array.isArray(nodes) || nodes.length === 0) {
+        throw new SpecError('nodes-empty', "O spec precisa ter uma lista 'nodes' não vazia.");
+      }
+      const taken = new Set();
+      const seenSpecIds = new Set();
+      const resolved = [];
+      nodes.forEach(node => {
+        if (!isPlainObject(node)) {
+          throw new SpecError('node-not-object',
+            'Cada nó precisa ser um objeto (recebido: ' + typeName(node) + ').');
+        }
+        const specId = node.id;
+        if (!truthy(specId) || typeof specId !== 'string') {
+          throw new SpecError('node-no-id', "Nó sem 'id' utilizável: " + JSON.stringify(node));
+        }
+        if (seenSpecIds.has(specId)) {
+          throw new SpecError('node-duplicate-id', "Id de nó repetido no spec: '" + specId + "'.");
+        }
+        seenSpecIds.add(specId);
+
+        const alias = node.type;
+        if (!TYPE_ALIASES.has(alias)) {
+          throw new SpecError('node-unknown-type', "O nó '" + specId + "' tem o tipo desconhecido '"
+            + shown(alias) + "' (tipos conhecidos: " + sortedKeys(TYPE_ALIASES) + ').');
+        }
+        const tag = TYPE_ALIASES.get(alias);
+
+        const event = node.event;
+        if (event !== undefined && event !== null) {
+          if (!EVENT_DEFINITIONS.has(event)) {
+            throw new SpecError('node-unknown-event', "O nó '" + specId + "' tem o evento desconhecido '"
+              + shown(event) + "' (eventos conhecidos: " + sortedKeys(EVENT_DEFINITIONS) + ').');
+          }
+          if (!EVENT_TAGS.has(tag)) {
+            throw new SpecError('node-event-not-allowed', "O nó '" + specId + "' é um '" + alias
+              + "', que não pode ter definição de evento — 'event' só vale em start/end/catch/throw/boundary.");
+          }
+        }
+
+        requireText(node.name, "O campo 'name' do nó '" + specId + "'");
+        const label = truthy(node.name) ? node.name : specId;
+        const prefix = ID_PREFIXES[tag] || DEFAULT_ID_PREFIX;
+        const generated = uniqueId(prefix + '_' + pascalCase(label), taken);
+        resolved.push({ specId: specId, tag: tag, id: generated, node: node });
+      });
+      checkBoundaryHosts(resolved);
+      return resolved;
+    }
+
+    function normaliseFlows(spec, idOf, tagOfSpecId) {
+      let flows = spec.flows;
+      if (flows === undefined || flows === null) flows = [];
+      if (!Array.isArray(flows)) throw new SpecError('flows-not-list', "'flows' precisa ser uma lista.");
+      return flows.map((flow, index) => {
+        const n = index + 1;
+        if (!isPlainObject(flow)) {
+          throw new SpecError('flow-not-object',
+            'O fluxo nº ' + n + ' precisa ser um objeto (recebido: ' + typeName(flow) + ').');
+        }
+        const src = flow.from;
+        const tgt = flow.to;
+        if (!truthy(src) || !truthy(tgt)) {
+          throw new SpecError('flow-missing-ends',
+            "O fluxo nº " + n + " precisa de 'from' e 'to': " + JSON.stringify(flow));
+        }
+        if (!idOf.has(src)) {
+          throw new SpecError('flow-unknown-source', 'O fluxo nº ' + n + " começa num nó que não existe: '" + shown(src) + "'.");
+        }
+        if (!idOf.has(tgt)) {
+          throw new SpecError('flow-unknown-target', 'O fluxo nº ' + n + " termina num nó que não existe: '" + shown(tgt) + "'.");
+        }
+        requireText(flow.label, "O campo 'label' do fluxo nº " + n);
+        requireText(flow.condition, "O campo 'condition' do fluxo nº " + n);
+        if (truthy(flow.default)) {
+          // O ramo default e o "nenhuma condicao bateu": so existe em gateway e nao tem condicao.
+          if (!GATEWAY_TAGS.has(tagOfSpecId.get(src))) {
+            throw new SpecError('flow-default-not-gateway', 'O fluxo nº ' + n + " está marcado como default mas sai de '"
+              + src + "', que é um '" + tagOfSpecId.get(src) + "' — só gateways têm fluxo default.");
+          }
+          if (truthy(flow.condition)) {
+            throw new SpecError('flow-default-with-condition', 'O fluxo nº ' + n
+              + ' está marcado como default E tem condição — o default é o ramo tomado quando nenhuma condição bateu.');
+          }
+        }
+        return { id: 'Flow_' + n, src: idOf.get(src), tgt: idOf.get(tgt), flow: flow };
+      });
+    }
+
+    function normaliseLanes(spec, resolvedNodes) {
+      const lanes = spec.lanes;
+      if (!truthy(lanes)) return [];
+      if (!Array.isArray(lanes)) throw new SpecError('lanes-not-list', "'lanes' precisa ser uma lista.");
+      const laneIds = [];
+      const members = new Map();
+      const taken = new Set();
+      lanes.forEach((lane, index) => {
+        const n = index + 1;
+        if (!isPlainObject(lane)) {
+          throw new SpecError('lane-not-object', 'A raia nº ' + n + ' precisa ser um objeto (recebido: ' + typeName(lane) + ').');
+        }
+        const specLaneId = truthy(lane.id) ? lane.id : lane.name;
+        if (!truthy(specLaneId)) {
+          throw new SpecError('lane-no-id', "A raia nº " + n + " precisa de um 'id' ou de um 'name'.");
+        }
+        if (members.has(specLaneId)) {
+          throw new SpecError('lane-duplicate-id', "Id de raia repetido no spec: '" + specLaneId + "'.");
+        }
+        requireText(lane.name, "O campo 'name' da raia nº " + n);
+        const label = truthy(lane.name) ? lane.name : specLaneId;
+        laneIds.push({ specId: specLaneId, id: uniqueId('Lane_' + pascalCase(label), taken), label: label });
+        members.set(specLaneId, []);
+      });
+      const defaultLane = laneIds[0].specId;
+      resolvedNodes.forEach(r => {
+        requireText(r.node.lane, "O campo 'lane' do nó '" + r.specId + "'");
+        const laneRef = truthy(r.node.lane) ? r.node.lane : defaultLane;
+        if (!members.has(laneRef)) {
+          throw new SpecError('node-unknown-lane', "O nó '" + r.specId + "' aponta para uma raia que não existe: '" + shown(laneRef) + "'.");
+        }
+        members.get(laneRef).push(r.id);
+      });
+      return laneIds.map(l => ({ id: l.id, label: l.label, members: members.get(l.specId) }));
+    }
+
+    function processIdOf(spec) {
+      const raw = truthy(spec.id) ? spec.id : (truthy(spec.name) ? spec.name : 'Process');
+      if (typeof raw === 'string' && raw.indexOf('Process_') === 0) return raw;
+      return 'Process_' + pascalCase(String(raw));
+    }
+
+    // Valida o spec e devolve o modelo: tudo que o XML precisa, ja com os ids gerados.
+    function buildModel(spec) {
+      if (!isPlainObject(spec)) {
+        throw new SpecError('spec-not-object', 'O spec precisa ser um objeto JSON (recebido: ' + typeName(spec) + ').');
+      }
+      const nodes = normaliseNodes(spec);
+      const idOf = new Map(nodes.map(r => [r.specId, r.id]));
+      const tagOfSpecId = new Map(nodes.map(r => [r.specId, r.tag]));
+      const flows = normaliseFlows(spec, idOf, tagOfSpecId);
+      const lanes = normaliseLanes(spec, nodes);
+      requireText(spec.name, "O campo 'name' do processo");
+
+      const incoming = new Map(nodes.map(r => [r.id, []]));
+      const outgoing = new Map(nodes.map(r => [r.id, []]));
+      const defaultOf = new Map();
+      flows.forEach(f => {
+        outgoing.get(f.src).push(f.id);
+        incoming.get(f.tgt).push(f.id);
+        if (truthy(f.flow.default)) defaultOf.set(f.src, f.id);
+      });
+      const processId = processIdOf(spec);
+      const suffix = processId.indexOf('_') < 0 ? processId : processId.slice(processId.indexOf('_') + 1);
+      nodes.forEach(r => {
+        r.incoming = incoming.get(r.id);
+        r.outgoing = outgoing.get(r.id);
+        r.defaultFlow = defaultOf.get(r.id);
+        r.hostId = r.tag === 'boundaryEvent' ? idOf.get(r.node.attachedTo) : null;
+      });
+      return {
+        processId: processId,
+        definitionsId: 'Definitions_' + suffix,
+        laneSetId: 'LaneSet_' + suffix,
+        name: truthy(spec.name) ? spec.name : null,
+        executable: truthy(spec.executable),
+        nodes: nodes,
+        flows: flows,
+        lanes: lanes
+      };
+    }
+
+    // A entrada do layout a partir do modelo (o mesmo grafo que o `layout` leria do XML gerado).
+    function layoutInputOfModel(model) {
+      return {
+        nodes: model.nodes.map(r => ({ id: r.id, tag: r.tag })),
+        flows: model.flows.map(f => ({ id: f.id, src: f.src, tgt: f.tgt })),
+        lanes: model.lanes.length ? model.lanes.map(l => ({ id: l.id, refs: l.members })) : null
+      };
+    }
+
+    function layoutDiagramNode(model) {
+      const layout = computeLayout(layoutInputOfModel(model));
+      const planeChildren = [];
+      layout.lanes.forEach(lane => {
+        planeChildren.push(xnode('bpmndi:BPMNShape',
+          [['id', lane.id + '_di'], ['bpmnElement', lane.id], ['isHorizontal', 'true']],
+          [xnode('omgdc:Bounds', [['x', lane.x], ['y', lane.y], ['width', lane.width], ['height', lane.height]])]));
+      });
+      layout.shapes.forEach(shape => {
+        planeChildren.push(xnode('bpmndi:BPMNShape', [['id', shape.id + '_di'], ['bpmnElement', shape.id]],
+          [xnode('omgdc:Bounds', [['x', shape.x], ['y', shape.y], ['width', shape.width], ['height', shape.height]])]));
+      });
+      layout.edges.forEach(edge => {
+        planeChildren.push(xnode('bpmndi:BPMNEdge', [['id', edge.id + '_di'], ['bpmnElement', edge.id]],
+          edge.waypoints.map(p => xnode('omgdi:waypoint', [['x', p.x], ['y', p.y]]))));
+      });
+      const plane = xnode('bpmndi:BPMNPlane',
+        [['id', 'BPMNPlane_' + model.processId], ['bpmnElement', model.processId]], planeChildren);
+      return xnode('bpmndi:BPMNDiagram', [['id', 'BPMNDiagram_' + model.processId]], [plane]);
+    }
+
+    function processNode(model) {
+      const attrs = [['id', model.processId], ['isExecutable', model.executable ? 'true' : 'false']];
+      if (model.name) attrs.push(['name', model.name]);
+      const children = [];
+      if (model.lanes.length) {
+        children.push(xnode('bpmn:laneSet', [['id', model.laneSetId]], model.lanes.map(lane =>
+          xnode('bpmn:lane', [['id', lane.id], ['name', lane.label]],
+            lane.members.map(member => xnode('bpmn:flowNodeRef', [], [], member))))));
+      }
+      model.nodes.forEach(r => {
+        const nodeAttrs = [['id', r.id]];
+        if (truthy(r.node.name)) nodeAttrs.push(['name', r.node.name]);
+        if (r.tag === 'boundaryEvent') {
+          nodeAttrs.push(['attachedToRef', r.hostId]);
+          nodeAttrs.push(['cancelActivity', r.node.interrupting === false ? 'false' : 'true']);
+        }
+        if (r.defaultFlow) nodeAttrs.push(['default', r.defaultFlow]);
+        const kids = r.incoming.map(f => xnode('bpmn:incoming', [], [], f))
+          .concat(r.outgoing.map(f => xnode('bpmn:outgoing', [], [], f)));
+        if (truthy(r.node.event)) kids.push(xnode('bpmn:' + EVENT_DEFINITIONS.get(r.node.event)));
+        children.push(xnode('bpmn:' + r.tag, nodeAttrs, kids));
+      });
+      model.flows.forEach(f => {
+        const flowAttrs = [['id', f.id]];
+        if (truthy(f.flow.label)) flowAttrs.push(['name', f.flow.label]);
+        flowAttrs.push(['sourceRef', f.src], ['targetRef', f.tgt]);
+        const kids = [];
+        if (truthy(f.flow.condition)) {
+          kids.push(xnode('bpmn:conditionExpression', [['xsi:type', 'bpmn:tFormalExpression']], [], f.flow.condition));
+        }
+        children.push(xnode('bpmn:sequenceFlow', flowAttrs, kids));
+      });
+      return xnode('bpmn:process', attrs, children);
+    }
+
+    // spec (objeto) -> texto BPMN 2.0. `options.layout === false` omite o DI (como `bpmn_build.build_xml`);
+    // por padrao ja sai com o layout do `bpmn_tool layout` (como `bpmn_build.py` inteiro).
+    function specToXml(spec, options) {
+      const model = buildModel(spec);
+      const children = [processNode(model)];
+      if (!options || options.layout !== false) children.push(layoutDiagramNode(model));
+      const root = xnode('bpmn:definitions', [
+        ['xmlns:bpmn', BPMN_NS], ['xmlns:bpmndi', BPMNDI_NS], ['xmlns:omgdc', DC_NS],
+        ['xmlns:omgdi', DI_NS], ['xmlns:xsi', XSI_NS],
+        ['id', model.definitionsId], ['targetNamespace', 'http://bpmn.io/schema/bpmn']
+      ], children);
+      return '<?xml version="1.0" encoding="UTF-8"?>\n' + serialize(root, 0);
+    }
+
+    // =====================================================================
+    // XML -> spec (bpmn_tool.extract_spec)
+    // =====================================================================
+    function bpmnChildren(parent, localName) {
+      return Array.from(parent.children).filter(c => c.namespaceURI === BPMN_NS && c.localName === localName);
+    }
+
+    function eventKind(nodeEl) {
+      const suffix = 'EventDefinition';
+      for (const child of Array.from(nodeEl.children)) {
+        const tag = child.localName;
+        if (tag.endsWith(suffix)) return tag.slice(0, tag.length - suffix.length);
+      }
+      return null;
+    }
+
+    // Devolve { spec, warnings }. Os avisos (pt-BR) dizem o que se perde numa reconstrucao.
+    function extractSpecFromXml(xmlText) {
+      const doc = new DOMParser().parseFromString(String(xmlText), 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) {
+        throw new ExtractError('not-well-formed', 'O diagrama não é um XML bem formado.');
+      }
+      const processes = bpmnChildren(doc.documentElement, 'process');
+      if (!processes.length) throw new ExtractError('no-process', 'Não há nenhum <bpmn:process> no diagrama.');
+      const processEl = processes[0];
+      const warnings = [];
+
+      if (processes.length > 1) {
+        warnings.push('O diagrama tem ' + processes.length + " processos (pools); só '" + processEl.getAttribute('id')
+          + "' foi exportado — os outros se perderiam ao reconstruir pelo spec.");
+      }
+      const nested = Array.from(processEl.children).filter(child =>
+        ['subProcess', 'transaction', 'adHocSubProcess'].indexOf(child.localName) >= 0
+        && Array.from(child.children).some(inner => FLOW_NODE_TAGS.indexOf(inner.localName) >= 0));
+      if (nested.length) {
+        warnings.push('O(s) subprocesso(s) expandido(s) ' + nested.map(n => n.getAttribute('id') || '?').join(', ')
+          + ' mantêm o fluxo interno, que o formato de spec não carrega — reconstruir por este spec os esvaziaria.');
+      }
+
+      const spec = { id: processEl.getAttribute('id') || 'Process_1' };
+      if (processEl.getAttribute('name')) spec.name = processEl.getAttribute('name');
+      spec.executable = processEl.getAttribute('isExecutable') === 'true';
+
+      const laneOf = new Map();
+      let lanes = [];
+      const laneSet = bpmnChildren(processEl, 'laneSet')[0];
+      if (laneSet) {
+        lanes = bpmnChildren(laneSet, 'lane');
+        lanes.forEach((lane, i) => bpmnChildren(lane, 'flowNodeRef').forEach(ref => {
+          if (ref.textContent) laneOf.set(ref.textContent.trim(), i);
+        }));
+      }
+      if (lanes.length) {
+        spec.lanes = lanes.map(lane => ({ id: lane.getAttribute('id'), name: lane.getAttribute('name') || lane.getAttribute('id') }));
+      }
+
+      const defaultFlows = new Set();
+      const nodes = [];
+      Array.from(processEl.children).forEach(child => {
+        const tag = child.localName;
+        if (FLOW_NODE_TAGS.indexOf(tag) < 0) return;
+        const id = child.getAttribute('id');
+        if (!id) return;
+        const node = { id: id, type: PREFERRED_TYPE_ALIAS[tag] || tag };
+        if (child.getAttribute('name')) node.name = child.getAttribute('name');
+        const kind = eventKind(child);
+        if (kind) node.event = kind;
+        if (tag === 'boundaryEvent') {
+          if (child.getAttribute('attachedToRef')) node.attachedTo = child.getAttribute('attachedToRef');
+          if (child.getAttribute('cancelActivity') === 'false') node.interrupting = false;
+        }
+        if (lanes.length && laneOf.has(id)) node.lane = lanes[laneOf.get(id)].getAttribute('id');
+        if (child.getAttribute('default')) defaultFlows.add(child.getAttribute('default'));
+        nodes.push(node);
+      });
+      spec.nodes = nodes;
+
+      spec.flows = bpmnChildren(processEl, 'sequenceFlow').map(flowEl => {
+        const flow = { from: flowEl.getAttribute('sourceRef'), to: flowEl.getAttribute('targetRef') };
+        if (flowEl.getAttribute('name')) flow.label = flowEl.getAttribute('name');
+        const condition = bpmnChildren(flowEl, 'conditionExpression')[0];
+        if (condition && condition.textContent) flow.condition = condition.textContent.trim();
+        if (defaultFlows.has(flowEl.getAttribute('id'))) {
+          flow.default = true;
+          delete flow.condition;
+        }
+        return flow;
+      });
+      return { spec: spec, warnings: warnings };
+    }
+
+    // Texto do arquivo exportado: o mesmo de `bpmn_tool.py extract` (UTF-8, indentado, sem escapar acentos).
+    function specToJson(spec) {
+      return JSON.stringify(spec, null, 2) + '\n';
+    }
+
+    return {
+      SpecError: SpecError, ExtractError: ExtractError,
+      FLOW_NODE_TAGS: FLOW_NODE_TAGS, SIZES: SIZES, DEFAULT_SIZE: DEFAULT_SIZE,
+      COL_SPACING: COL_SPACING, ROW_SPACING: ROW_SPACING, BASE_X: BASE_X, BASE_Y: BASE_Y,
+      LANE_SLOTS: LANE_SLOTS, LANE_PADDING: LANE_PADDING, BACK_EDGE_DROP: BACK_EDGE_DROP,
+      computeLayout: computeLayout, buildModel: buildModel, specToXml: specToXml,
+      extractSpecFromXml: extractSpecFromXml, specToJson: specToJson, pascalCase: pascalCase
+    };
+  })();
+
+  // ---------------------------------------------------------------------
+  // "Organizar automaticamente" como UM comando do commandStack: o plano
+  // (posicoes novas de formas, raias, rotas e rotulos) ja vem pronto; aqui so
+  // se aplica e se guarda o estado anterior. Escrever direto nas formas (e no
+  // DI) evita os comportamentos do bpmn-js que reagem a "mover" (reatribuir
+  // raia, reencaixar anexos, rotear de novo): o grafo e as raias nao mudam.
+  // Desfazer devolve tudo de uma vez.
+  // ---------------------------------------------------------------------
+  function AutoLayoutHandler(bpmnFactory, elementRegistry, graphicsFactory) {
+    this._bpmnFactory = bpmnFactory;
+    this._registry = elementRegistry;
+    this._graphicsFactory = graphicsFactory;
+  }
+  AutoLayoutHandler.$inject = ['bpmnFactory', 'elementRegistry', 'graphicsFactory'];
+
+  function setBox(shape, box) {
+    shape.x = box.x;
+    shape.y = box.y;
+    shape.width = box.width;
+    shape.height = box.height;
+    const bounds = shape.di && shape.di.bounds;
+    if (bounds) {
+      bounds.x = box.x;
+      bounds.y = box.y;
+      bounds.width = box.width;
+      bounds.height = box.height;
+    }
+  }
+
+  AutoLayoutHandler.prototype.execute = function (context) {
+    const factory = this._bpmnFactory;
+    const plan = context.plan;
+    const undo = { boxes: [], routes: [], labels: [] };
+    const dirty = [];
+
+    plan.boxes.forEach(entry => {
+      const el = entry.element;
+      undo.boxes.push({ element: el, box: { x: el.x, y: el.y, width: el.width, height: el.height } });
+      setBox(el, entry);
+      dirty.push(el);
+    });
+
+    plan.routes.forEach(entry => {
+      const el = entry.element;
+      const di = el.di;
+      undo.routes.push({ element: el, waypoints: el.waypoints, diWaypoints: di ? di.waypoint : undefined });
+      el.waypoints = entry.waypoints.map(p => ({ x: p.x, y: p.y }));
+      if (di && typeof di.set === 'function') di.set('waypoint', factory.createDiWaypoints(entry.waypoints));
+      dirty.push(el);
+    });
+
+    // Os rotulos externos voltam para a posicao padrao, junto do elemento. Marcados como
+    // alterados, o proprio bpmn-js grava o bounds deles no DI (BpmnUpdater, em 'shape.changed').
+    plan.labels.forEach(entry => {
+      const el = entry.element;
+      const diLabel = el.di ? el.di.label : undefined;
+      const diBounds = diLabel ? diLabel.bounds : undefined;
+      undo.labels.push({
+        element: el, x: el.x, y: el.y, diLabel: diLabel, diBounds: diBounds,
+        diBox: diBounds ? { x: diBounds.x, y: diBounds.y, width: diBounds.width, height: diBounds.height } : null
+      });
+      el.x = entry.x;
+      el.y = entry.y;
+      dirty.push(el);
+    });
+
+    context.undo = undo;
+    return dirty;
+  };
+
+  AutoLayoutHandler.prototype.revert = function (context) {
+    const undo = context.undo;
+    const dirty = [];
+    undo.boxes.forEach(entry => {
+      setBox(entry.element, entry.box);
+      dirty.push(entry.element);
+    });
+    undo.routes.forEach(entry => {
+      entry.element.waypoints = entry.waypoints;
+      const di = entry.element.di;
+      if (di && typeof di.set === 'function') di.set('waypoint', entry.diWaypoints);
+      dirty.push(entry.element);
+    });
+    // Os rotulos NAO entram na lista de alterados: isso faria o bpmn-js regravar o bounds deles no
+    // DI (como na ida). O DI volta exatamente ao que era e so o desenho e atualizado aqui.
+    undo.labels.forEach(entry => {
+      const el = entry.element;
+      el.x = entry.x;
+      el.y = entry.y;
+      const di = el.di;
+      if (di && typeof di.set === 'function') {
+        di.set('label', entry.diLabel);
+        if (entry.diLabel) {
+          if (entry.diBox) Object.assign(entry.diBounds, entry.diBox);
+          entry.diLabel.set('bounds', entry.diBounds);
+        }
+      }
+      const gfx = this._registry.getGraphics(el);
+      if (gfx) this._graphicsFactory.update('shape', el, gfx);
+    });
+    return dirty;
+  };
+
+  function AutoLayoutRegistration(commandStack) {
+    commandStack.registerHandler('editor.autoLayout', AutoLayoutHandler);
+  }
+  AutoLayoutRegistration.$inject = ['commandStack'];
+  const AutoLayoutModule = {
+    __init__: ['autoLayoutRegistration'],
+    autoLayoutRegistration: ['type', AutoLayoutRegistration]
+  };
+"""
+
+
+# A parte de interface da Fase 3B (organizar, importar/exportar spec, comentarios
+# de revisao). Entra DENTRO do bloco que cria o modeler (usa `modeler`, `showToast`,
+# `setFileState`...), pelo marcador {skill_ui_js}. Tambem e uma string simples.
+SKILL_UI_JS = r"""
+    // =====================================================================
+    // F3.6 Organizar automaticamente: o plano vem de SkillPort.computeLayout (o
+    // mesmo codigo do import do spec) e entra no historico como UM comando.
+    // =====================================================================
+    const DEFAULT_LABEL_HEIGHT = 20;     // como o bpmn-js posiciona rotulos externos
+    const ELEMENT_LABEL_DISTANCE = 10;
+
+    function isExpandedContainer(element) {
+      return !!element && ((element.di && element.di.isExpanded === true)
+        || (element.children || []).some(child => !child.labelTarget));
+    }
+
+    // Meio do trecho central da rota, com a folga que o bpmn-js da ao rotulo do fluxo.
+    function waypointsMid(points) {
+      const mid = points.length / 2 - 1;
+      const first = points[Math.floor(mid)];
+      const second = points[Math.ceil(mid + 0.01)];
+      let x = first.x + (second.x - first.x) / 2;
+      let y = first.y + (second.y - first.y) / 2;
+      const angle = Math.atan((second.y - first.y) / (second.x - first.x));
+      if (Math.abs(angle) < Math.PI / 2) y -= ELEMENT_LABEL_DISTANCE;
+      else x += ELEMENT_LABEL_DISTANCE;
+      return { x: x, y: y };
+    }
+
+    // O que estiver dentro de um subprocesso expandido acompanha o container.
+    function shiftDescendants(container, dx, dy, plan) {
+      (container.children || []).forEach(child => {
+        if (child.labelTarget) return;
+        if (child.waypoints) {
+          const route = { element: child, waypoints: child.waypoints.map(p => ({ x: p.x + dx, y: p.y + dy })) };
+          plan.routes.push(route);
+          plan.routeOf.set(child.id, route);
+        } else {
+          const box = { element: child, x: child.x + dx, y: child.y + dy, width: child.width, height: child.height };
+          plan.boxes.push(box);
+          plan.boxOf.set(child.id, box);
+          shiftDescendants(child, dx, dy, plan);
+        }
+      });
+    }
+
+    // status: 'ok' (com boxes/routes/labels), 'empty' (nada a organizar) ou 'unsupported'.
+    function buildAutoLayoutPlan() {
+      const registry = modeler.get('elementRegistry');
+      const root = modeler.get('canvas').getRootElement();
+      const process = root && root.businessObject;
+      if (!process || process.$type !== 'bpmn:Process') return { status: 'unsupported', reason: 'pools' };
+
+      const nodes = [];
+      const flows = [];
+      (process.flowElements || []).forEach(el => {
+        if (!el.id) return;
+        if (el.$type === 'bpmn:SequenceFlow') {
+          const src = refId(el.sourceRef);
+          const tgt = refId(el.targetRef);
+          if (src && tgt) flows.push({ id: el.id, src: src, tgt: tgt });
+          return;
+        }
+        const tag = tagOf(el);
+        if (SkillPort.FLOW_NODE_TAGS.indexOf(tag) < 0) return;
+        const entry = { id: el.id, tag: tag };
+        const shape = registry.get(el.id);
+        if (shape && isExpandedContainer(shape)) entry.size = [shape.width, shape.height];
+        nodes.push(entry);
+      });
+      if (!nodes.length) return { status: 'empty' };
+
+      let lanes = null;
+      const laneSet = (process.laneSets || [])[0];
+      if (laneSet) {
+        const laneList = laneSet.lanes || [];
+        if (laneList.some(lane => lane.childLaneSet)) return { status: 'unsupported', reason: 'nested-lanes' };
+        lanes = laneList.map(lane => ({ id: lane.id, refs: (lane.flowNodeRef || []).map(ref => ref.id).filter(Boolean) }));
+      }
+
+      const layout = SkillPort.computeLayout({ nodes: nodes, flows: flows, lanes: lanes });
+      const plan = { status: 'ok', boxes: [], routes: [], labels: [], boxOf: new Map(), routeOf: new Map() };
+      layout.lanes.forEach(lane => {
+        const el = registry.get(lane.id);
+        if (el) plan.boxes.push({ element: el, x: lane.x, y: lane.y, width: lane.width, height: lane.height });
+      });
+      layout.shapes.forEach(shape => {
+        const el = registry.get(shape.id);
+        if (!el) return;
+        const box = { element: el, x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+        plan.boxes.push(box);
+        plan.boxOf.set(el.id, box);
+        if (isExpandedContainer(el)) shiftDescendants(el, shape.x - el.x, shape.y - el.y, plan);
+      });
+      layout.edges.forEach(edge => {
+        const el = registry.get(edge.id);
+        if (!el) return;
+        const route = { element: el, waypoints: edge.waypoints };
+        plan.routes.push(route);
+        plan.routeOf.set(el.id, route);
+      });
+      // Rotulos externos voltam para a posicao padrao, junto do elemento ja movido.
+      registry.forEach(el => {
+        if (!el.labelTarget) return;
+        const target = el.labelTarget;
+        const route = plan.routeOf.get(target.id);
+        const box = plan.boxOf.get(target.id);
+        const mid = route ? waypointsMid(route.waypoints)
+          : (box ? { x: box.x + box.width / 2, y: box.y + box.height + DEFAULT_LABEL_HEIGHT / 2 } : null);
+        if (!mid) return;
+        // Como o import do bpmn-js: caixa padrao de 90x20 centrada em `mid`; o texto so define a largura/altura.
+        plan.labels.push({ element: el, x: Math.round(mid.x - el.width / 2), y: Math.round(mid.y - DEFAULT_LABEL_HEIGHT / 2) });
+      });
+      return plan;
+    }
+
+    function runAutoLayout() {
+      if (!modeler) return { status: 'unavailable' };
+      endTypingSession();
+      flushPendingFields();
+      let plan;
+      try {
+        plan = buildAutoLayoutPlan();
+      } catch (err) {
+        showError('Falha ao organizar o diagrama: ' + err.message);
+        return { status: 'error' };
+      }
+      if (plan.status === 'unsupported') {
+        showToast(plan.reason === 'pools'
+          ? 'Organizar automaticamente ainda não funciona em diagramas com pools (colaboração).'
+          : 'Organizar automaticamente ainda não funciona com raias aninhadas.');
+        return plan;
+      }
+      if (plan.status === 'empty') {
+        showToast('Não há elementos para organizar.');
+        return plan;
+      }
+      try {
+        modeler.get('commandStack').execute('editor.autoLayout', { plan: plan });
+      } catch (err) {
+        showError('Falha ao organizar o diagrama: ' + err.message);
+        return { status: 'error' };
+      }
+      zoomFit();
+      updateZoomIndicator();
+      showToast('Diagrama organizado automaticamente. Ctrl+Z desfaz.');
+      return { status: 'ok', moved: plan.boxes.length };
+    }
+
+    // =====================================================================
+    // Arquivos: salvar texto (seletor do navegador ou download) e ler texto.
+    // =====================================================================
+    async function saveTextFile(text, fileName, mime, pickerTypes, startIn) {
+      if (window.showSaveFilePicker) {
+        try {
+          const options = { suggestedName: fileName, types: pickerTypes };
+          if (startIn) options.startIn = startIn;
+          const handle = await window.showSaveFilePicker(options);
+          const writable = await handle.createWritable();
+          await writable.write(text);
+          await writable.close();
+          return { handle: handle, mode: 'picker', name: handle.name };
+        } catch (err) {
+          if (err && err.name === 'AbortError') return null;
+        }
+      }
+      const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return { handle: null, mode: 'download', name: fileName };
+    }
+
+    function diagramBaseName() {
+      return String(currentFileName || 'diagrama').replace(/\.(bpmn|xml)$/i, '');
+    }
+
+    // =====================================================================
+    // F3.5 Exportar e importar o spec JSON (formato de references/process-spec.md)
+    // =====================================================================
+    const specInput = document.getElementById('spec-input');
+    const JSON_PICKER_TYPE = { description: 'Arquivo JSON', accept: { 'application/json': ['.json'] } };
+
+    async function buildSpecExport() {
+      const saved = await modeler.saveXML({ format: true });
+      const extracted = SkillPort.extractSpecFromXml(saved.xml);
+      return {
+        spec: extracted.spec,
+        warnings: extracted.warnings,
+        text: SkillPort.specToJson(extracted.spec),
+        fileName: diagramBaseName() + '-spec.json'
+      };
+    }
+
+    async function exportSpec() {
+      try {
+        flushPendingFields();
+        const out = await buildSpecExport();
+        if (out.warnings.length) showNotice('spec-export-warning', out.warnings.join(' '));
+        else hideNotice('spec-export-warning');
+        const saved = await saveTextFile(out.text, out.fileName, 'application/json', [JSON_PICKER_TYPE], currentFileHandle);
+        if (saved) showToast("Spec '" + saved.name + "' exportado (" + out.spec.nodes.length + ' nós).');
+        return out;
+      } catch (err) {
+        showError('Falha ao exportar o spec: ' + err.message);
+        return null;
+      }
+    }
+
+    function showSpecProblem(message) {
+      showNotice('spec-problem', message, []);
+    }
+
+    function importedDiagramName(spec, fileName) {
+      let base = fileName ? String(fileName).replace(/\.json$/i, '').replace(/-spec$/i, '') : '';
+      if (!base) {
+        const raw = spec && (spec.id || spec.name);
+        base = raw ? String(raw).replace(/^Process_/, '') : 'diagrama';
+      }
+      return base.replace(/[\\\/:*?"<>|]/g, '_') + '.bpmn';
+    }
+
+    // Valida o spec, gera o BPMN com layout e abre como diagrama novo. Spec invalido
+    // mostra a mensagem em pt-BR e NAO mexe no diagrama atual.
+    async function importSpecText(text, fileName) {
+      let spec;
+      try {
+        spec = JSON.parse(String(text).replace(/^﻿/, ''));
+      } catch (err) {
+        showSpecProblem('O arquivo não é um JSON válido: ' + err.message);
+        return { ok: false, code: 'json-invalid' };
+      }
+      let xml;
+      try {
+        xml = SkillPort.specToXml(spec);
+      } catch (err) {
+        if (err instanceof SkillPort.SpecError) {
+          showSpecProblem('Spec inválido: ' + err.message);
+          return { ok: false, code: err.code, message: err.message };
+        }
+        showSpecProblem('Não foi possível gerar o diagrama a partir do spec: ' + err.message);
+        return { ok: false, code: 'build-failed' };
+      }
+      if (new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('parsererror').length) {
+        showSpecProblem('Spec inválido: algum texto tem caracteres que não cabem num XML.');
+        return { ok: false, code: 'invalid-xml' };
+      }
+      if (!confirmDiscardIfDirty('Você possui alterações não salvas. Deseja descartá-las para importar o spec?')) {
+        return { ok: false, code: 'cancelled' };
+      }
+      hideNotice('spec-problem');
+      const name = importedDiagramName(spec, fileName);
+      await loadDiagram(xml, name, null);
+      if (errorBanner.style.display === 'block') {
+        // O bpmn-js recusou o documento: o loadXML já mostrou o erro; nada a marcar como novo.
+        return { ok: false, code: 'load-failed' };
+      }
+      // Diagrama novo, ainda sem arquivo: conta como "não salvo".
+      setFileState(name, null, true);
+      scheduleDraftSave();
+      return { ok: true, name: name };
+    }
+
+    async function openSpecFile() {
+      if (window.showOpenFilePicker) {
+        try {
+          const options = { types: [JSON_PICKER_TYPE], multiple: false };
+          if (currentFileHandle) options.startIn = currentFileHandle;
+          const picked = await window.showOpenFilePicker(options);
+          const file = await picked[0].getFile();
+          await importSpecText(await file.text(), file.name);
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') showError('Falha ao abrir o spec: ' + (err && err.message));
+        }
+        return;
+      }
+      specInput.value = '';
+      specInput.click();
+    }
+
+    specInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      await importSpecText(await file.text(), file.name);
+    });
+
+    // =====================================================================
+    // F3.7 Comentarios de revisao: ficam em <nome>.review.json, ao lado do .bpmn.
+    // Nada disso passa pelo commandStack nem pelo XML: comentar nao "suja" o
+    // diagrama. Os nao salvos tem rascunho proprio no localStorage e aviso proprio ao fechar.
+    // =====================================================================
+    const REVIEW_FILE_VERSION = 1;
+    const reviewSection = document.getElementById('review-section');
+    const reviewTitle = document.getElementById('review-title');
+    const reviewList = document.getElementById('review-list');
+    const reviewAuthorInput = document.getElementById('review-author');
+    const reviewTextInput = document.getElementById('review-text');
+    const reviewAddButton = document.getElementById('review-add');
+    const reviewSummary = document.getElementById('review-summary');
+    const reviewOpenCount = document.getElementById('rv-open');
+    const reviewOrphanCount = document.getElementById('rv-orphans');
+    const reviewOrphans = document.getElementById('review-orphans');
+    const reviewOrphansList = document.getElementById('review-orphans-list');
+    const commentsInput = document.getElementById('comments-input');
+
+    let reviewComments = [];
+    let reviewDiagramName = null;
+    let reviewDirty = false;
+    let reviewFileHandle = null;
+    let reviewSeq = 0;
+
+    function reviewDraftKey(name) {
+      return 'bpmn-editor-review:' + window.location.pathname + '::' + name;
+    }
+
+    function newCommentId() {
+      reviewSeq += 1;
+      return 'c' + Date.now().toString(36) + '-' + reviewSeq;
+    }
+
+    // Aceita qualquer lista "do mundo externo" (arquivo, rascunho): o que nao serve e contado, nao some em silencio.
+    function sanitizeComments(raw) {
+      const list = [];
+      const ids = new Set();
+      let dropped = 0;
+      (Array.isArray(raw) ? raw : []).forEach(item => {
+        const elementId = item && typeof item.elementId === 'string' ? item.elementId : '';
+        const text = item && typeof item.text === 'string' ? item.text : '';
+        if (!elementId || !text.trim()) {
+          dropped += 1;
+          return;
+        }
+        let id = typeof item.id === 'string' && item.id ? item.id : newCommentId();
+        while (ids.has(id)) id = newCommentId();
+        ids.add(id);
+        list.push({
+          id: id,
+          elementId: elementId,
+          text: text,
+          author: typeof item.author === 'string' ? item.author : '',
+          createdAt: typeof item.createdAt === 'string' && item.createdAt ? item.createdAt : new Date().toISOString(),
+          resolved: item.resolved === true
+        });
+      });
+      return { list: list, dropped: dropped };
+    }
+
+    function readReviewDraft(name) {
+      try {
+        const raw = window.localStorage.getItem(reviewDraftKey(name));
+        const data = raw ? JSON.parse(raw) : null;
+        return data && Array.isArray(data.comments) ? sanitizeComments(data.comments).list : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function writeReviewDraft() {
+      if (!reviewDiagramName) return;
+      try {
+        window.localStorage.setItem(reviewDraftKey(reviewDiagramName), JSON.stringify({
+          version: REVIEW_FILE_VERSION, diagram: reviewDiagramName, comments: reviewComments
+        }));
+      } catch (e) {}
+    }
+
+    function clearReviewDraft() {
+      if (!reviewDiagramName) return;
+      try {
+        window.localStorage.removeItem(reviewDraftKey(reviewDiagramName));
+      } catch (e) {}
+    }
+
+    // Aviso próprio ao fechar (separado do aviso do diagrama): só enquanto houver comentário não salvo.
+    function reviewBeforeUnloadHandler(e) {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+
+    function setReviewDirty(flag) {
+      reviewDirty = flag;
+      if (flag) window.addEventListener('beforeunload', reviewBeforeUnloadHandler);
+      else window.removeEventListener('beforeunload', reviewBeforeUnloadHandler);
+    }
+
+    function reviewElementExists(id) {
+      try {
+        return !!modeler.get('elementRegistry').get(id);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function reviewElementName(id) {
+      try {
+        const element = modeler.get('elementRegistry').get(id);
+        const name = element && element.businessObject && element.businessObject.name;
+        return name ? name : id;
+      } catch (e) {
+        return id;
+      }
+    }
+
+    function reviewCounts() {
+      const counts = { open: 0, orphans: 0, byElement: {} };
+      reviewComments.forEach(comment => {
+        if (!reviewElementExists(comment.elementId)) {
+          counts.orphans += 1;
+          return;
+        }
+        if (comment.resolved) return;
+        counts.open += 1;
+        counts.byElement[comment.elementId] = (counts.byElement[comment.elementId] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function reviewShortText(text) {
+      const flat = String(text).replace(/\s+/g, ' ').trim();
+      return flat.length > 40 ? flat.slice(0, 40) + '…' : flat;
+    }
+
+    function formatReviewDate(iso) {
+      const date = new Date(iso);
+      return isNaN(date.getTime()) ? String(iso) : date.toLocaleString('pt-BR');
+    }
+
+    function reviewItem(comment, orphan) {
+      const item = document.createElement('li');
+      item.className = 'review-item';
+      item.setAttribute('data-comment-id', comment.id);
+      item.setAttribute('data-resolved', comment.resolved ? 'true' : 'false');
+      const meta = document.createElement('div');
+      meta.className = 'review-meta';
+      const who = document.createElement('strong');
+      who.textContent = comment.author || 'Sem autor';
+      meta.appendChild(who);
+      meta.appendChild(document.createTextNode(' · ' + formatReviewDate(comment.createdAt)));
+      if (orphan) {
+        const where = document.createElement('span');
+        where.className = 'review-orphan-ref';
+        where.textContent = ' · elemento ausente: ' + comment.elementId;
+        meta.appendChild(where);
+      }
+      if (comment.resolved) {
+        const state = document.createElement('span');
+        state.className = 'review-state';
+        state.textContent = 'Resolvido';
+        meta.appendChild(state);
+      }
+      const body = document.createElement('p');
+      body.className = 'review-text';
+      body.textContent = comment.text;
+      const actions = document.createElement('div');
+      actions.className = 'review-actions';
+      const short = reviewShortText(comment.text);
+      const resolve = document.createElement('button');
+      resolve.type = 'button';
+      resolve.setAttribute('data-review-action', 'toggle');
+      resolve.textContent = comment.resolved ? 'Reabrir' : 'Resolver';
+      resolve.setAttribute('aria-label', (comment.resolved ? 'Reabrir' : 'Resolver') + ' o comentário: ' + short);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.setAttribute('data-review-action', 'delete');
+      remove.textContent = 'Excluir';
+      remove.setAttribute('aria-label', 'Excluir o comentário: ' + short);
+      actions.appendChild(resolve);
+      actions.appendChild(remove);
+      item.appendChild(meta);
+      item.appendChild(body);
+      item.appendChild(actions);
+      return item;
+    }
+
+    function reviewTargetElement() {
+      const element = currentPropertyElement();
+      return element && element.type !== 'bpmn:Process' && !element.labelTarget ? element : null;
+    }
+
+    function renderReviewSection() {
+      if (!reviewSection) return;
+      const element = reviewTargetElement();
+      reviewList.innerHTML = '';
+      if (!element) return;
+      const own = reviewComments.filter(comment => comment.elementId === element.id);
+      const open = own.filter(comment => !comment.resolved).length;
+      reviewTitle.textContent = 'Comentários de revisão (' + open + (open === 1 ? ' aberto' : ' abertos') + ' de ' + own.length + ')';
+      if (!own.length) {
+        const empty = document.createElement('li');
+        empty.className = 'review-empty';
+        empty.textContent = 'Nenhum comentário neste elemento.';
+        reviewList.appendChild(empty);
+      }
+      own.forEach(comment => reviewList.appendChild(reviewItem(comment, false)));
+    }
+
+    function renderReviewOrphans() {
+      const orphans = reviewComments.filter(comment => !reviewElementExists(comment.elementId));
+      reviewOrphans.hidden = orphans.length === 0;
+      reviewOrphansList.innerHTML = '';
+      orphans.forEach(comment => reviewOrphansList.appendChild(reviewItem(comment, true)));
+    }
+
+    function renderReviewSummary(counts) {
+      reviewOpenCount.textContent = String(counts.open);
+      reviewOrphanCount.textContent = String(counts.orphans);
+      reviewSummary.setAttribute('data-state', counts.open || counts.orphans ? 'pending' : 'none');
+      reviewSummary.setAttribute('aria-label', 'Comentários de revisão: ' + counts.open + ' abertos, '
+        + counts.orphans + ' órfãos. Ir para os comentários');
+    }
+
+    // Selo no canvas (overlay HTML, fora do SVG): só nos elementos com comentário aberto.
+    function renderReviewBadges(counts) {
+      let overlays;
+      let registry;
+      try {
+        overlays = modeler.get('overlays');
+        registry = modeler.get('elementRegistry');
+        overlays.remove({ type: 'review' });
+      } catch (e) {
+        return;
+      }
+      Object.keys(counts.byElement).forEach(id => {
+        const element = registry.get(id);
+        if (!element) return;
+        const total = counts.byElement[id];
+        const badge = document.createElement('span');
+        badge.className = 'rev-badge';
+        badge.setAttribute('role', 'img');
+        const description = total + (total === 1 ? ' comentário de revisão aberto' : ' comentários de revisão abertos')
+          + ' em ' + reviewElementName(id);
+        badge.setAttribute('aria-label', description);
+        badge.title = description;
+        badge.textContent = '💬 ' + total;
+        try {
+          overlays.add(element, 'review', { position: { top: -12, right: 12 }, html: badge, scale: false });
+        } catch (e) {}
+      });
+    }
+
+    function refreshReviewUi() {
+      if (!modeler || !reviewSection) return;
+      const counts = reviewCounts();
+      renderReviewSection();
+      renderReviewOrphans();
+      renderReviewSummary(counts);
+      renderReviewBadges(counts);
+    }
+
+    function reviewChanged() {
+      setReviewDirty(true);
+      writeReviewDraft();
+      refreshReviewUi();
+    }
+
+    function addReviewComment(elementId, text, author) {
+      const clean = String(text || '').trim();
+      if (!elementId || !clean) return null;
+      const comment = {
+        id: newCommentId(), elementId: elementId, text: clean, author: String(author || '').trim(),
+        createdAt: new Date().toISOString(), resolved: false
+      };
+      reviewComments.push(comment);
+      reviewChanged();
+      return comment;
+    }
+
+    function setReviewResolved(id, resolved) {
+      const comment = reviewComments.find(c => c.id === id);
+      if (!comment) return;
+      comment.resolved = !!resolved;
+      reviewChanged();
+    }
+
+    function deleteReviewComment(id) {
+      const before = reviewComments.length;
+      reviewComments = reviewComments.filter(c => c.id !== id);
+      if (reviewComments.length !== before) reviewChanged();
+    }
+
+    // O diagrama aberto muda: cada um tem a sua lista (o rascunho do anterior já está guardado).
+    function onReviewDiagramLoaded(name) {
+      if (reviewDiagramName !== name) {
+        reviewDiagramName = name;
+        reviewFileHandle = null;
+        // Um rascunho vazio (comentários todos excluídos, sem salvar) não tem o que avisar ao fechar.
+        const draft = readReviewDraft(name);
+        const pending = !!draft && draft.length > 0;
+        if (draft && !pending) clearReviewDraft();
+        reviewComments = pending ? draft : [];
+        setReviewDirty(pending);
+      }
+      refreshReviewUi();
+    }
+
+    function reviewFileText() {
+      return JSON.stringify({
+        version: REVIEW_FILE_VERSION,
+        diagram: currentFileName,
+        comments: reviewComments.map(c => ({
+          id: c.id, elementId: c.elementId, text: c.text, author: c.author,
+          createdAt: c.createdAt, resolved: c.resolved
+        }))
+      }, null, 2) + '\n';
+    }
+
+    async function saveReviewFile() {
+      try {
+        const fileName = diagramBaseName() + '.review.json';
+        const text = reviewFileText();
+        let saved = null;
+        if (reviewFileHandle && reviewFileHandle.createWritable) {
+          try {
+            const writable = await reviewFileHandle.createWritable();
+            await writable.write(text);
+            await writable.close();
+            saved = { name: reviewFileHandle.name };
+          } catch (e) {
+            reviewFileHandle = null;
+          }
+        }
+        if (!saved) {
+          saved = await saveTextFile(text, fileName, 'application/json', [JSON_PICKER_TYPE], currentFileHandle);
+          if (!saved) return null;
+          reviewFileHandle = saved.handle;
+        }
+        setReviewDirty(false);
+        clearReviewDraft();
+        showToast("Comentários salvos em '" + saved.name + "' (" + reviewComments.length + ').');
+        return { text: text, name: saved.name };
+      } catch (err) {
+        showError('Falha ao salvar os comentários: ' + err.message);
+        return null;
+      }
+    }
+
+    function loadReviewText(text, fileName, handle) {
+      let data;
+      try {
+        data = JSON.parse(String(text).replace(/^﻿/, ''));
+      } catch (err) {
+        showNotice('review-problem', 'O arquivo de comentários não é um JSON válido: ' + err.message, []);
+        return { ok: false, code: 'json-invalid' };
+      }
+      if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.comments)
+          || typeof data.version !== 'number') {
+        showNotice('review-problem', "Este arquivo não parece de comentários de revisão: faltam 'version' e a lista 'comments'.", []);
+        return { ok: false, code: 'not-review-file' };
+      }
+      if (data.version > REVIEW_FILE_VERSION) {
+        showNotice('review-problem', 'Este arquivo de comentários é de uma versão mais nova (' + data.version
+          + ') que este editor entende (' + REVIEW_FILE_VERSION + ').', []);
+        return { ok: false, code: 'newer-version' };
+      }
+      if (reviewDirty && reviewComments.length
+          && !confirm('Há comentários não salvos. Abrir o arquivo substitui os comentários atuais. Continuar?')) {
+        return { ok: false, code: 'cancelled' };
+      }
+      hideNotice('review-problem');
+      const clean = sanitizeComments(data.comments);
+      reviewComments = clean.list;
+      reviewFileHandle = handle || null;
+      setReviewDirty(false);
+      clearReviewDraft();
+      refreshReviewUi();
+      const counts = reviewCounts();
+      const notes = [];
+      if (clean.dropped) notes.push(clean.dropped + ' item(ns) inválido(s) ignorado(s)');
+      if (counts.orphans) notes.push(counts.orphans + ' órfão(s)');
+      if (typeof data.diagram === 'string' && data.diagram && data.diagram !== currentFileName) {
+        notes.push("o arquivo é do diagrama '" + data.diagram + "'");
+      }
+      showToast('Comentários abertos: ' + reviewComments.length + (notes.length ? ' (' + notes.join('; ') + ')' : '') + '.');
+      return { ok: true, count: reviewComments.length, orphans: counts.orphans, dropped: clean.dropped };
+    }
+
+    async function openReviewFile() {
+      if (window.showOpenFilePicker) {
+        try {
+          const options = { types: [JSON_PICKER_TYPE], multiple: false };
+          if (currentFileHandle) options.startIn = currentFileHandle;
+          const picked = await window.showOpenFilePicker(options);
+          const file = await picked[0].getFile();
+          loadReviewText(await file.text(), file.name, picked[0]);
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') showError('Falha ao abrir os comentários: ' + (err && err.message));
+        }
+        return;
+      }
+      commentsInput.value = '';
+      commentsInput.click();
+    }
+
+    commentsInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      loadReviewText(await file.text(), file.name, null);
+    });
+
+    function rememberReviewAuthor(author) {
+      try {
+        window.localStorage.setItem('bpmn-editor-review-author', author);
+      } catch (e) {}
+    }
+
+    try {
+      reviewAuthorInput.value = window.localStorage.getItem('bpmn-editor-review-author') || '';
+    } catch (e) {}
+
+    function submitReviewComment() {
+      const element = reviewTargetElement();
+      if (!element) return;
+      if (!reviewTextInput.value.trim()) {
+        showToast('Escreva o comentário antes de adicionar.');
+        reviewTextInput.focus();
+        return;
+      }
+      rememberReviewAuthor(reviewAuthorInput.value.trim());
+      addReviewComment(element.id, reviewTextInput.value, reviewAuthorInput.value);
+      reviewTextInput.value = '';
+      reviewTextInput.focus();
+    }
+
+    reviewAddButton.addEventListener('click', submitReviewComment);
+    reviewTextInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        submitReviewComment();
+      }
+    });
+
+    function onReviewListClick(event) {
+      const button = event.target.closest('[data-review-action]');
+      const item = event.target.closest('[data-comment-id]');
+      if (!button || !item) return;
+      const id = item.getAttribute('data-comment-id');
+      if (button.getAttribute('data-review-action') === 'delete') {
+        deleteReviewComment(id);
+      } else {
+        const comment = reviewComments.find(c => c.id === id);
+        if (comment) setReviewResolved(id, !comment.resolved);
+      }
+    }
+    reviewList.addEventListener('click', onReviewListClick);
+    reviewOrphansList.addEventListener('click', onReviewListClick);
+
+    // O contador do rodapé leva ao primeiro lugar com comentário aberto (ou à lista de órfãos).
+    reviewSummary.addEventListener('click', () => {
+      const counts = reviewCounts();
+      const firstOpen = reviewComments.find(c => !c.resolved && counts.byElement[c.elementId]);
+      const firstId = firstOpen ? firstOpen.elementId : null;
+      if (firstId) {
+        if (propertiesPanel.classList.contains('hidden')) {
+          propertiesPanel.classList.remove('hidden');
+          btnPropsToggle.setAttribute('aria-pressed', 'true');
+        }
+        modeler.get('selection').select(modeler.get('elementRegistry').get(firstId));
+        reviewSection.scrollIntoView({ block: 'nearest' });
+        reviewTextInput.focus();
+      } else if (counts.orphans) {
+        reviewOrphans.scrollIntoView({ block: 'nearest' });
+        const first = reviewOrphansList.querySelector('button');
+        if (first) first.focus();
+      } else {
+        showToast('Nenhum comentário aberto.');
+      }
+    });
+
+    modeler.on('commandStack.changed', refreshReviewUi);
+
+    // ---- ligacao dos controles do menu --------------------------------------
+    document.getElementById('btn-auto-layout').addEventListener('click', runAutoLayout);
+    document.getElementById('btn-import-spec').addEventListener('click', openSpecFile);
+    document.getElementById('btn-export-spec').addEventListener('click', exportSpec);
+    document.getElementById('btn-save-comments').addEventListener('click', saveReviewFile);
+    document.getElementById('btn-open-comments').addEventListener('click', openReviewFile);
+
+    // Funções `async` declaradas dentro de um bloco não viram globais sozinhas: estas
+    // são as entradas programáticas (os testes e o console as chamam por aqui).
+    Object.assign(window, {
+      importSpecText: importSpecText, exportSpec: exportSpec, buildSpecExport: buildSpecExport,
+      saveReviewFile: saveReviewFile, openReviewFile: openReviewFile, openSpecFile: openSpecFile
+    });
+"""
 
 
 def _embed_font(css, vendor_dir):
@@ -940,6 +2645,95 @@ def render_editor_html(vendor_dir=None):
   @media print {{
     .vld-badge {{ display: none !important; }}
   }}
+  @media print {{
+    .rev-badge {{ display: none !important; }}
+  }}
+
+  /* Comentários de revisão (F3.7): selo roxo no canto superior DIREITO (o da validação fica no esquerdo). */
+  #status-footer #review-summary {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    cursor: pointer;
+  }}
+  #review-summary:hover {{ background: #1e293b; }}
+  #review-summary[data-state="pending"] {{ border-color: #a78bfa; }}
+  #review-summary b {{ font-variant-numeric: tabular-nums; color: #ddd6fe; }}
+  @media screen {{
+    .rev-badge {{
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      border: 2px solid #ffffff;
+      background: #5b21b6;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.3;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px rgba(15,23,42,0.5);
+      pointer-events: none;
+    }}
+  }}
+  #review-section {{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 12px;
+    margin-top: 12px;
+  }}
+  #review-section h3, #review-orphans h2 {{
+    margin: 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+  }}
+  #review-orphans {{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 12px;
+    margin-top: 12px;
+  }}
+  #review-orphans[hidden] {{ display: none; }}
+  .review-hint {{ margin: 0; font-size: 12px; color: #475569; line-height: 1.4; }}
+  .review-list {{ list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }}
+  .review-item {{
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #6d28d9;
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #0f172a;
+  }}
+  .review-item[data-resolved="true"] {{ border-left-color: #15803d; background: #f1f5f9; }}
+  .review-item[data-resolved="true"] .review-text {{ text-decoration: line-through; color: #475569; }}
+  .review-meta {{ font-size: 11px; color: #475569; overflow-wrap: anywhere; }}
+  .review-state {{ margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #dcfce7; color: #166534; font-weight: 700; }}
+  .review-text {{ margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }}
+  .review-actions {{ display: flex; gap: 6px; }}
+  .review-actions button {{
+    padding: 2px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 11px;
+    cursor: pointer;
+  }}
+  .review-actions button:hover {{ background: #e2e8f0; }}
+  .review-empty {{ font-size: 12px; color: #475569; }}
 
   @media print {{
     @page {{
@@ -1104,6 +2898,8 @@ def render_editor_html(vendor_dir=None):
     top: calc(100% + 4px);
     left: 0;
     min-width: 240px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -1328,6 +3124,12 @@ def render_editor_html(vendor_dir=None):
         <button type="button" role="menuitem" id="btn-export-png" title="Exportar imagem em alta resolução (.png)">📷 Exportar PNG</button>
         <button type="button" role="menuitem" id="btn-export-pdf" title="Imprimir o diagrama (escolha &quot;Salvar como PDF&quot;)">🖨️ Exportar PDF</button>
         <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" id="btn-import-spec" title="Gerar um diagrama novo, já organizado, a partir de um spec JSON (formato da skill)">🧩 Importar spec JSON…</button>
+        <button type="button" role="menuitem" id="btn-export-spec" title="Salvar o diagrama aberto como spec JSON (nome-spec.json), o formato que a skill reconstrói">📤 Exportar spec JSON</button>
+        <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" id="btn-save-comments" title="Salvar os comentários de revisão em nome.review.json (o .bpmn não muda)">💬 Salvar comentários</button>
+        <button type="button" role="menuitem" id="btn-open-comments" title="Abrir um arquivo .review.json de comentários de revisão">📂 Abrir comentários…</button>
+        <div class="menu-sep" role="separator"></div>
         <div class="menu-row">
           <label for="preset-select">Exemplos</label>
           <!--PRESET_SELECT_START-->
@@ -1354,6 +3156,7 @@ def render_editor_html(vendor_dir=None):
         <div class="menu-sep" role="separator"></div>
         <button type="button" role="menuitem" id="btn-search" title="Localizar elementos no diagrama (Ctrl+F)">🔍 Buscar no diagrama <span class="kbd">Ctrl+F</span></button>
         <button type="button" role="menuitem" id="btn-route-90" title="Alinhar conexões selecionadas (ou todas) em ângulos ortogonais de 90°">📐 Curva 90° nas conexões</button>
+        <button type="button" role="menuitem" id="btn-auto-layout" aria-label="Organizar automaticamente o diagrama" title="Reposicionar todos os elementos como o comando layout da skill (um Ctrl+Z desfaz tudo)">🧭 Organizar automaticamente</button>
       </div>
     </div>
 
@@ -1396,6 +3199,8 @@ def render_editor_html(vendor_dir=None):
 </header>
 
 <input type="file" id="file-input" accept=".bpmn,.xml" style="display:none" />
+<input type="file" id="spec-input" accept=".json,application/json" style="display:none" aria-label="Escolher o spec JSON a importar" />
+<input type="file" id="comments-input" accept=".json,application/json" style="display:none" aria-label="Escolher o arquivo de comentários de revisão" />
 
 <div id="error-banner"></div>
 <div id="notice-banner" role="status" aria-live="polite"></div>
@@ -1547,6 +3352,20 @@ def render_editor_html(vendor_dir=None):
           Fluxo padrão (quando nenhuma condição for atendida)
         </label>
       </div>
+      <section id="review-section" aria-labelledby="review-title">
+        <h3 id="review-title">Comentários de revisão</h3>
+        <p class="review-hint">Ficam num arquivo à parte (<code>.review.json</code>): não alteram o .bpmn nem o histórico de desfazer.</p>
+        <ul id="review-list" class="review-list" aria-label="Comentários deste elemento"></ul>
+        <div class="prop-field">
+          <label for="review-author">Autor (opcional)</label>
+          <input type="text" id="review-author" placeholder="Seu nome" autocomplete="name" />
+        </div>
+        <div class="prop-field">
+          <label for="review-text">Novo comentário</label>
+          <textarea id="review-text" placeholder="Pergunta, dúvida ou pedido de ajuste (Ctrl+Enter adiciona)"></textarea>
+        </div>
+        <button type="button" id="review-add" class="btn-action">💬 Adicionar comentário</button>
+      </section>
     </div>
 
     <div id="validation-section">
@@ -1568,6 +3387,12 @@ def render_editor_html(vendor_dir=None):
       </div>
       <div id="validation-results"></div>
     </div>
+
+    <div id="review-orphans" hidden>
+      <h2>Comentários órfãos</h2>
+      <p class="validation-hint">Estes comentários apontam para elementos que não existem mais no diagrama. Foram preservados: restaure o elemento (Ctrl+Z) ou exclua o comentário.</p>
+      <ul id="review-orphans-list" class="review-list" aria-label="Comentários órfãos"></ul>
+    </div>
   </aside>
 </div>
 
@@ -1577,6 +3402,9 @@ def render_editor_html(vendor_dir=None):
     <span class="vs vs-error"><span aria-hidden="true">✖</span> <b id="vs-error">0</b> erros</span>
     <span class="vs vs-warn"><span aria-hidden="true">▲</span> <b id="vs-warn">0</b> avisos</span>
     <span class="vs vs-info"><span aria-hidden="true">ℹ</span> <b id="vs-info">0</b> infos</span>
+  </button>
+  <button type="button" id="review-summary" data-state="none" aria-label="Comentários de revisão: 0 abertos, 0 órfãos. Ir para os comentários" title="Comentários de revisão em aberto (arquivo lateral .review.json): clique para ir ao primeiro">
+    <span aria-hidden="true">💬</span> <b id="rv-open">0</b> abertos <span class="rv-sep" aria-hidden="true">·</span> <b id="rv-orphans">0</b> órfãos
   </button>
   <span class="footer-spacer"></span>
   <span id="zoom-percent" aria-label="Zoom atual" title="Zoom atual">100%</span>
@@ -1646,6 +3474,7 @@ def render_editor_html(vendor_dir=None):
   const PRESETS = {presets_json};
   /*PRESETS_END*/
   const TEMPLATES = {templates_json};
+{SKILL_PORT_JS}
   let DEFAULT_DIAGRAM_NAME = "";
   let DEFAULT_DIAGRAM_XML = null;
 
@@ -2428,6 +4257,7 @@ def render_editor_html(vendor_dir=None):
         CustomResizeModule,
         FontStyleModule,
         MultiCommandModule,
+        AutoLayoutModule,
         TranslateModule
       ]
     }});
@@ -2535,6 +4365,7 @@ def render_editor_html(vendor_dir=None):
           : PROP_HINT_DEFAULT;
       }}
       propBody.classList.toggle('hidden', !isRealElement);
+      renderReviewSection();
       // Sem seleção: propriedades do processo (F2.12).
       propProcess.hidden = !!(selection && selection.length) || !processBusinessObject();
       if (!propProcess.hidden) populateProcessFields();
@@ -3906,6 +5737,7 @@ def render_editor_html(vendor_dir=None):
         applyAllElementFontStyles();
         try {{ modeler.get('commandStack').clear(); }} catch (e) {{}}
         setFileState(name, handle, false);
+        onReviewDiagramLoaded(name);
         updateUndoRedoState();
         applyOpeningZoom();
         updateZoomIndicator();
@@ -4645,6 +6477,7 @@ def render_editor_html(vendor_dir=None):
       }}
     }}
 
+{SKILL_UI_JS}
     // Eventos da Toolbar
     document.getElementById('btn-open').addEventListener('click', openFile);
     document.getElementById('btn-save').addEventListener('click', saveFile);
