@@ -36,7 +36,75 @@ CDN_BASE = "https://unpkg.com/bpmn-js@17.0.0/dist"
 # changes: `bpmn_tool.copy_editor_if_needed` compares it against the copy already
 # in the project and refreshes an older, untouched one (an edited copy is kept
 # and reported instead -- see `was_edited_locally`).
-EDITOR_VERSION = "1.3.1"
+EDITOR_VERSION = "1.4.0"
+
+# ---------------------------------------------------------------------------
+# Validation rules (Fase 3A, F3.1). `scripts/lint_rules.py` is the authority;
+# the editor re-implements, in JS over the bpmn-js in-memory model, every rule
+# that still makes sense there. Each rule id of the linter MUST appear in exactly
+# one of the two tables below: tests/test_editor_validation_phase3a.py fails when
+# the linter gains a rule nobody decided about, or when a severity drifts.
+# ---------------------------------------------------------------------------
+
+# rule id -> severity (identical to the `@register(name, severity)` of the linter).
+PORTED_RULES = {
+    # errors: graph, events, gateways, lanes
+    "missing-start-event": "error",
+    "missing-end-event": "error",
+    "boundary-host-missing": "error",
+    "unreachable-node": "error",
+    "dead-end": "error",
+    "not-reachable-from-start": "error",
+    "flow-refs-mismatch": "error",
+    "start-has-incoming": "error",
+    "end-has-outgoing": "error",
+    "default-flow-invalid": "error",
+    "boundary-invalid": "error",
+    "no-path-to-end": "error",
+    "lane-coverage-duplicate": "error",
+    # warnings: modelling advice
+    "implicit-split": "warn",
+    "implicit-merge": "warn",
+    "gateway-without-condition": "warn",
+    "mixed-gateway": "warn",
+    "parallel-join-without-split": "warn",
+    "unnamed-element": "warn",
+    "duplicate-flow": "warn",
+    "self-loop": "warn",
+    "lane-coverage-missing": "warn",
+    "di-overlap": "warn",
+    "parallel-split-without-join": "warn",
+    # info: style
+    "useless-gateway": "info",
+    "id-convention": "info",
+    "name-too-long": "info",
+}
+
+# Rules the editor repairs mechanically (same philosophy as `bpmn_tool.py fix`:
+# bookkeeping only, never a node, flow, condition or name).
+EDITOR_FIXABLE_RULES = ("duplicate-flow", "flow-refs-mismatch")
+
+# rule id -> why it is NOT ported. These exist because the XML can be malformed or
+# lack DI; once bpmn-js has imported the file those states cannot be represented.
+OMITTED_RULES = {
+    "duplicate-id": "bpmn-js recusa importar ids duplicados e o registro do editor so guarda ids unicos",
+    "missing-diagram": "sem BPMNDiagram o bpmn-js nao abre o arquivo; no editor sempre ha um diagrama",
+    "missing-process": "sem <process> nao ha o que editar; o editor mantem sempre um processo",
+    "malformed-element": "elemento sem id e ignorado/renomeado pelo bpmn-js na importacao",
+    "dangling-flow-ref": "o moddle descarta referencias nao resolvidas ao importar (viram aviso de importacao)",
+    "missing-plane": "o bpmn-js cria e mantem o plano do diagrama; nao existe sem plano no editor",
+    "missing-shape": "no editor o DI nasce junto com o elemento; sem shape o elemento nem aparece no canvas",
+    "missing-edge": "no editor o DI nasce junto com o fluxo; sem edge o fluxo nem aparece no canvas",
+    "edge-waypoints": "o bpmn-js recalcula os waypoints do fluxo ao importar e ao editar",
+}
+
+# The rule table as the JS literal embedded in the editor (single quotes on purpose:
+# tests grep the page for `rule: 'id'`).
+VALIDATION_RULES_JS = ",\n  ".join(
+    "{ rule: '%s', severity: '%s', fixable: %s }" % (
+        rule, severity, "true" if rule in EDITOR_FIXABLE_RULES else "false")
+    for rule, severity in PORTED_RULES.items()
+)
 
 PRESET_FILES = {
     "06-bus-boarding-process.bpmn": ROOT_DIR / "tests" / "06-bus-boarding-process.bpmn",
@@ -738,6 +806,8 @@ def render_editor_html(vendor_dir=None):
     line-height: 1.4;
     cursor: pointer;
     color: #0f172a;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }}
   .validation-finding:hover {{
     background: #f1f5f9;
@@ -762,6 +832,113 @@ def render_editor_html(vendor_dir=None):
     background: #dcfce7;
     color: #166534;
     font-size: 12px;
+  }}
+  .validation-finding.info {{
+    border-left-color: #2563eb;
+  }}
+  .validation-empty, .validation-hint {{
+    margin: 0;
+    font-size: 12px;
+    color: #475569;
+    line-height: 1.4;
+  }}
+  .validation-actions {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }}
+  .validation-actions button:disabled {{
+    opacity: 0.55;
+    cursor: not-allowed;
+  }}
+  #validation-filters {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }}
+  #validation-filters button {{
+    padding: 3px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 11px;
+    cursor: pointer;
+  }}
+  #validation-filters button[aria-pressed="true"] {{
+    background: #0f172a;
+    color: #ffffff;
+    border-color: #0f172a;
+  }}
+  #validation-filters .count {{
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+  }}
+  .fix-preview-list {{
+    margin: 0 0 16px;
+    padding-left: 20px;
+    font-size: 13px;
+    line-height: 1.5;
+  }}
+  .dialog-actions {{
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }}
+
+  /* Contador de validação no rodapé (F3.2): visível com o painel fechado */
+  #status-footer #validation-summary {{
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    cursor: pointer;
+  }}
+  #validation-summary:hover {{ background: #1e293b; }}
+  #validation-summary .vs {{ white-space: nowrap; font-variant-numeric: tabular-nums; }}
+  #validation-summary .vs-error b {{ color: #fca5a5; }}
+  #validation-summary .vs-warn b {{ color: #fcd34d; }}
+  #validation-summary .vs-info b {{ color: #93c5fd; }}
+  #validation-summary[data-state="ok"] {{ border-color: #166534; }}
+
+  /* Marcadores no canvas (F3.3): só na tela, nunca no SVG/PNG/PDF exportados.
+     Erro = traço contínuo grosso + selo ✖; aviso = traço tracejado + selo ▲
+     (forma e ícone, não só cor). */
+  @media screen {{
+    .djs-element.vld-error:not(.djs-connection) .djs-visual > :is(rect, circle, polygon, ellipse),
+    .djs-connection.vld-error .djs-visual > path {{
+      stroke: #dc2626 !important;
+      stroke-width: 3px !important;
+    }}
+    .djs-element.vld-warn:not(.djs-connection) .djs-visual > :is(rect, circle, polygon, ellipse),
+    .djs-connection.vld-warn .djs-visual > path {{
+      stroke: #b45309 !important;
+      stroke-width: 3px !important;
+      stroke-dasharray: 6 3 !important;
+    }}
+    .vld-badge {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      color: #ffffff;
+      box-shadow: 0 1px 3px rgba(15,23,42,0.5);
+      pointer-events: none;
+    }}
+    .vld-badge-error {{ background: #b91c1c; }}
+    .vld-badge-warn {{ background: #b45309; }}
+  }}
+  @media print {{
+    .vld-badge {{ display: none !important; }}
   }}
 
   @media print {{
@@ -1374,9 +1551,21 @@ def render_editor_html(vendor_dir=None):
 
     <div id="validation-section">
       <h2>Validação</h2>
-      <button id="btn-validate" class="btn-action" title="Checar o diagrama contra as regras da skill">
-        ✅ Validar diagrama
-      </button>
+      <p class="validation-hint">A validação roda sozinha a cada alteração. Os elementos com problema ganham um contorno e um selo no diagrama.</p>
+      <div class="validation-actions">
+        <button id="btn-validate" class="btn-action" title="Checar o diagrama contra as regras da skill agora">
+          ✅ Validar diagrama
+        </button>
+        <button id="btn-fix" class="btn-action" type="button" disabled aria-label="Corrigir problemas: nada a corrigir automaticamente" title="Corrigir automaticamente o que é mecânico (com prévia)">
+          🛠️ Corrigir<span class="fix-count"></span>
+        </button>
+      </div>
+      <div id="validation-filters" role="group" aria-label="Filtrar achados por severidade">
+        <button type="button" data-severity-filter="all" aria-pressed="true">Todos <span class="count">0</span></button>
+        <button type="button" data-severity-filter="error" aria-pressed="false">Erros <span class="count">0</span></button>
+        <button type="button" data-severity-filter="warn" aria-pressed="false">Avisos <span class="count">0</span></button>
+        <button type="button" data-severity-filter="info" aria-pressed="false">Infos <span class="count">0</span></button>
+      </div>
       <div id="validation-results"></div>
     </div>
   </aside>
@@ -1384,6 +1573,11 @@ def render_editor_html(vendor_dir=None):
 
 <footer id="status-footer" aria-label="Barra de status">
   <span id="selection-info">Nenhuma seleção</span>
+  <button type="button" id="validation-summary" data-state="ok" data-errors="0" data-warnings="0" data-infos="0" aria-label="Validação: ainda não executada. Abrir o painel de validação" title="Resumo da validação: clique para abrir o painel">
+    <span class="vs vs-error"><span aria-hidden="true">✖</span> <b id="vs-error">0</b> erros</span>
+    <span class="vs vs-warn"><span aria-hidden="true">▲</span> <b id="vs-warn">0</b> avisos</span>
+    <span class="vs vs-info"><span aria-hidden="true">ℹ</span> <b id="vs-info">0</b> infos</span>
+  </button>
   <span class="footer-spacer"></span>
   <span id="zoom-percent" aria-label="Zoom atual" title="Zoom atual">100%</span>
   <button type="button" id="btn-zoom-selection" aria-label="Ajustar à seleção (sem seleção, ajusta ao diagrama)" title="Ajustar o zoom para caber a seleção; sem seleção, ajusta ao diagrama">⤢ Ajustar à seleção</button>
@@ -1425,6 +1619,18 @@ def render_editor_html(vendor_dir=None):
       <button type="button" class="template-card" data-template="loop"><strong>Com laço</strong><span>Revisão que volta para correção até aprovar.</span></button>
     </div>
     <button type="button" id="templates-close">Cancelar (Esc)</button>
+  </div>
+</div>
+
+<div id="fix-dialog" class="dialog-backdrop" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="fix-title" tabindex="-1">
+    <h2 id="fix-title">Corrigir problemas</h2>
+    <p class="dialog-hint">Estas são as correções mecânicas que serão feitas. Nenhuma etapa, fluxo, condição ou nome é criado. Um único Ctrl+Z desfaz tudo.</p>
+    <ul id="fix-preview-list" class="fix-preview-list"></ul>
+    <div class="dialog-actions">
+      <button type="button" id="fix-apply" class="btn-primary">Aplicar correções</button>
+      <button type="button" id="fix-cancel">Cancelar (Esc)</button>
+    </div>
   </div>
 </div>
 
@@ -2112,6 +2318,7 @@ def render_editor_html(vendor_dir=None):
   // ---------------------------------------------------------------------
   const shortcutsDialog = document.getElementById('shortcuts-dialog');
   const templatesDialog = document.getElementById('templates-dialog');
+  const fixDialog = document.getElementById('fix-dialog');
   let dialogOpener = null;
 
   function openDialog(dialog, focusSelector) {{
@@ -2135,7 +2342,7 @@ def render_editor_html(vendor_dir=None):
   }}
 
   function openDialogElement() {{
-    return [shortcutsDialog, templatesDialog].find(d => !d.hidden) || null;
+    return [shortcutsDialog, templatesDialog, fixDialog].find(d => !d.hidden) || null;
   }}
 
   function openShortcuts() {{ openDialog(shortcutsDialog, '#shortcuts-close'); }}
@@ -2145,7 +2352,7 @@ def render_editor_html(vendor_dir=None):
 
   document.getElementById('shortcuts-close').addEventListener('click', closeShortcuts);
   document.getElementById('templates-close').addEventListener('click', closeTemplatesDialog);
-  [shortcutsDialog, templatesDialog].forEach(dialog => {{
+  [shortcutsDialog, templatesDialog, fixDialog].forEach(dialog => {{
     dialog.addEventListener('mousedown', (e) => {{
       if (e.target === dialog) closeDialog(dialog);
     }});
@@ -2814,137 +3021,494 @@ def render_editor_html(vendor_dir=None):
     }});
 
     // ---------------------------------------------------------------------
-    // Validação dentro do editor: um subconjunto das regras de
-    // scripts/lint_rules.py, com os MESMOS ids de regra, para que o que o
-    // editor mostra e o que `bpmn_tool validate` reporta sejam o mesmo
-    // vocabulário. A autoridade continua sendo o linter em Python; aqui é
-    // realimentação imediata enquanto se desenha.
+    // Validação viva (Fase 3A). O editor reimplementa, em JS sobre o modelo
+    // em memória do bpmn-js, as regras de scripts/lint_rules.py com os MESMOS
+    // ids e severidades (tabela gerada de PORTED_RULES no gerador; as regras
+    // omitidas e o motivo estão em OMITTED_RULES). A autoridade continua sendo
+    // o linter em Python (`bpmn_tool.py validate`): aqui é realimentação
+    // imediata enquanto se desenha, e o teste de paridade garante que os dois
+    // dizem o mesmo sobre os exemplos do repositório.
     // ---------------------------------------------------------------------
-    const GATEWAY_TYPES = [
-      'bpmn:ExclusiveGateway', 'bpmn:ParallelGateway', 'bpmn:InclusiveGateway',
-      'bpmn:EventBasedGateway', 'bpmn:ComplexGateway'
+    const VALIDATION_RULES = [
+  {VALIDATION_RULES_JS}
     ];
+    const RULE_SEVERITY = {{}};
+    VALIDATION_RULES.forEach(entry => {{ RULE_SEVERITY[entry.rule] = entry.severity; }});
+    const SEVERITY_ORDER = ['error', 'warn', 'info'];
+    const SEVERITY_LABEL = {{
+      error: {{ singular: 'erro', plural: 'erros', title: 'Erro', icon: '✖' }},
+      warn: {{ singular: 'aviso', plural: 'avisos', title: 'Aviso', icon: '▲' }},
+      info: {{ singular: 'informação', plural: 'informações', title: 'Informação', icon: 'ℹ' }}
+    }};
 
-    function flowNodes() {{
-      return modeler.get('elementRegistry').filter(el =>
-        el.businessObject
-        && el.businessObject.$instanceOf
-        && el.businessObject.$instanceOf('bpmn:FlowNode')
-        && !el.labelTarget
-      );
+    const FLOW_NODE_TAGS = [
+      'startEvent', 'endEvent', 'task', 'userTask', 'serviceTask', 'sendTask', 'receiveTask',
+      'manualTask', 'scriptTask', 'businessRuleTask', 'exclusiveGateway', 'parallelGateway',
+      'inclusiveGateway', 'eventBasedGateway', 'complexGateway', 'subProcess', 'callActivity',
+      'transaction', 'adHocSubProcess', 'intermediateCatchEvent', 'intermediateThrowEvent',
+      'boundaryEvent'
+    ];
+    const GATEWAY_TAGS = [
+      'exclusiveGateway', 'parallelGateway', 'inclusiveGateway', 'eventBasedGateway', 'complexGateway'
+    ];
+    const ACTIVITY_TAGS = [
+      'task', 'userTask', 'serviceTask', 'sendTask', 'receiveTask', 'manualTask', 'scriptTask',
+      'businessRuleTask', 'subProcess', 'callActivity', 'transaction', 'adHocSubProcess'
+    ];
+    const NAMEABLE_TAGS = GATEWAY_TAGS.concat([
+      'task', 'userTask', 'serviceTask', 'sendTask', 'receiveTask', 'manualTask', 'scriptTask',
+      'businessRuleTask', 'subProcess', 'callActivity', 'startEvent', 'endEvent'
+    ]);
+    const NAME_LIMIT = 60;
+    const ID_CONVENTION = /^[A-Z][A-Za-z0-9]*_[A-Za-z0-9]+$/;
+
+    function tagOf(businessObject) {{
+      const local = String((businessObject && businessObject.$type) || '').replace(/^[^:]*:/, '');
+      return local.charAt(0).toLowerCase() + local.slice(1);
     }}
 
-    function outgoingOf(element) {{
-      return (element.businessObject.outgoing || []);
+    function refId(ref) {{
+      return ref && ref.id ? ref.id : null;
     }}
 
-    function incomingOf(element) {{
-      return (element.businessObject.incoming || []);
-    }}
-
-    function reachesAnEnd(nodes) {{
-      const byId = {{}};
-      nodes.forEach(node => {{ byId[node.id] = node; }});
-      const reaching = new Set();
-      const stack = nodes.filter(n => n.type === 'bpmn:EndEvent').map(n => n.id);
-      while (stack.length) {{
-        const id = stack.pop();
-        if (reaching.has(id)) continue;
-        reaching.add(id);
-        const node = byId[id];
-        if (!node) continue;
-        incomingOf(node).forEach(flow => {{
-          if (flow.sourceRef) stack.push(flow.sourceRef.id);
-        }});
-        if (node.type === 'bpmn:BoundaryEvent' && node.businessObject.attachedToRef) {{
-          stack.push(node.businessObject.attachedToRef.id);
+    // Modelo de um <process> a partir do businessObject, como o `build_graph` do
+    // linter faz a partir do XML: nós, fluxos e índices de entrada/saída. Os
+    // fluxos vêm de sourceRef/targetRef (a verdade do diagrama), nunca das listas
+    // incoming/outgoing, que o linter confere à parte (flow-refs-mismatch).
+    function buildProcessModel(process) {{
+      const nodes = {{}};
+      const order = [];
+      const flowElements = process.flowElements || [];
+      flowElements.forEach(el => {{
+        const tag = tagOf(el);
+        if (!el.id || FLOW_NODE_TAGS.indexOf(tag) < 0) return;
+        nodes[el.id] = {{ id: el.id, tag: tag, bo: el, inEdges: [], outEdges: [],
+          attachedToRef: refId(el.attachedToRef) }};
+        order.push(el.id);
+      }});
+      const edges = [];
+      flowElements.forEach(el => {{
+        if (el.$type !== 'bpmn:SequenceFlow' || !el.id) return;
+        // Referência não resolvida no import chega aqui como ausente: vira um
+        // extremo "solto" único por fluxo (equivale ao dangling-flow-ref, omitido).
+        const src = refId(el.sourceRef) || ('?' + el.id + ':src');
+        const tgt = refId(el.targetRef) || ('?' + el.id + ':tgt');
+        edges.push({{ id: el.id, src: src, tgt: tgt, bo: el }});
+        if (nodes[src]) nodes[src].outEdges.push({{ flow: el.id, other: tgt }});
+        if (nodes[tgt]) nodes[tgt].inEdges.push({{ flow: el.id, other: src }});
+      }});
+      const attachedBoundary = {{}};
+      order.forEach(id => {{
+        const node = nodes[id];
+        if (node.tag === 'boundaryEvent' && node.attachedToRef) {{
+          (attachedBoundary[node.attachedToRef] = attachedBoundary[node.attachedToRef] || []).push(id);
         }}
+      }});
+      return {{ id: process.id || 'processo', bo: process, nodes: nodes, order: order,
+        edges: edges, attachedBoundary: attachedBoundary }};
+    }}
+
+    function buildProcessModels() {{
+      const definitions = modeler.getDefinitions ? modeler.getDefinitions() : null;
+      const roots = (definitions && definitions.rootElements) || [];
+      return roots.filter(root => root.$type === 'bpmn:Process').map(buildProcessModel);
+    }}
+
+    function nodeIds(model, predicate) {{
+      return model.order.filter(id => predicate(model.nodes[id]));
+    }}
+
+    function hasTag(model, tag) {{
+      return model.order.some(id => model.nodes[id].tag === tag);
+    }}
+
+    function nodeLabel(node) {{
+      return '“' + (((node.bo.name || '').trim()) || node.id) + '”';
+    }}
+
+    function reachableFromStarts(model) {{
+      const seen = new Set();
+      const stack = nodeIds(model, node => node.tag === 'startEvent');
+      while (stack.length) {{
+        const current = stack.pop();
+        if (seen.has(current)) continue;
+        seen.add(current);
+        const node = model.nodes[current];
+        if (node) node.outEdges.forEach(edge => stack.push(edge.other));
+        (model.attachedBoundary[current] || []).forEach(id => stack.push(id));
+      }}
+      return seen;
+    }}
+
+    // Ids dos quais ALGUM caminho chega a um evento de fim (caminha para trás a
+    // partir dos fins, seguindo também o hospedeiro de cada evento de borda).
+    function reachesAnEnd(model) {{
+      const reaching = new Set();
+      const stack = nodeIds(model, node => node.tag === 'endEvent');
+      while (stack.length) {{
+        const current = stack.pop();
+        if (reaching.has(current)) continue;
+        reaching.add(current);
+        const node = model.nodes[current];
+        if (!node) continue;
+        node.inEdges.forEach(edge => stack.push(edge.other));
+        if (node.tag === 'boundaryEvent' && node.attachedToRef) stack.push(node.attachedToRef);
       }}
       return reaching;
     }}
 
-    function laneMembership() {{
-      const covered = new Set();
-      let hasLanes = false;
-      modeler.get('elementRegistry').forEach(el => {{
-        if (el.type !== 'bpmn:Lane') return;
-        hasLanes = true;
-        (el.businessObject.flowNodeRef || []).forEach(ref => covered.add(ref.id));
+    function laneSetOf(model) {{
+      const sets = model.bo.laneSets || [];
+      return sets.length ? sets[0] : null;
+    }}
+
+    function declaredIds(list) {{
+      return (list || []).map(flow => flow.id).filter(Boolean).sort();
+    }}
+
+    function sameList(a, b) {{
+      return a.length === b.length && a.every((value, index) => value === b[index]);
+    }}
+
+    function listText(list) {{
+      return list.length ? list.join(', ') : 'nenhum';
+    }}
+
+    function conditionText(flowBo) {{
+      return flowBo && flowBo.conditionExpression ? String(flowBo.conditionExpression.body || '').trim() : '';
+    }}
+
+    // Assinatura de um fluxo: rótulo e condição fazem parte do que ele diz.
+    function flowSignature(edge) {{
+      return JSON.stringify([edge.src, edge.tgt, String(edge.bo.name || '').trim(), conditionText(edge.bo)]);
+    }}
+
+    // Cada função devolve achados {{rule, id, message}}; a severidade vem da tabela.
+    const PROCESS_CHECKS = [
+      function missingStartEnd(model, add) {{
+        if (!hasTag(model, 'startEvent')) {{
+          add('missing-start-event', null, 'O processo “' + (model.bo.name || model.id) + '” não tem evento de início');
+        }}
+        if (!hasTag(model, 'endEvent')) {{
+          add('missing-end-event', null, 'O processo “' + (model.bo.name || model.id) + '” não tem evento de fim');
+        }}
+      }},
+      function structure(model, add) {{
+        const reachable = reachableFromStarts(model);
+        const hasStart = hasTag(model, 'startEvent');
+        const hasEnd = hasTag(model, 'endEvent');
+        const reaching = hasEnd ? reachesAnEnd(model) : new Set();
+        model.order.forEach(id => {{
+          const node = model.nodes[id];
+          const label = nodeLabel(node);
+          if (node.tag === 'boundaryEvent' && node.attachedToRef && !model.nodes[node.attachedToRef]) {{
+            add('boundary-host-missing', id, 'O evento de borda ' + label + ' está preso a “' + node.attachedToRef + '”, que não existe neste processo');
+          }}
+          if (node.tag !== 'boundaryEvent' && node.tag !== 'startEvent' && !node.inEdges.length) {{
+            add('unreachable-node', id, label + ' não recebe nenhum fluxo');
+          }}
+          if (node.tag !== 'endEvent' && !node.outEdges.length) {{
+            add('dead-end', id, label + ' não tem fluxo de saída');
+          }}
+          if (hasStart && !reachable.has(id)) {{
+            add('not-reachable-from-start', id, label + ' não é alcançável a partir de nenhum evento de início');
+          }}
+          if (hasEnd && !reaching.has(id) && reachable.has(id) && node.outEdges.length) {{
+            add('no-path-to-end', id, label + ' nunca alcança um evento de fim (todo caminho dele volta em laço)');
+          }}
+        }});
+      }},
+      function flowRefs(model, add) {{
+        model.order.forEach(id => {{
+          const node = model.nodes[id];
+          const declaredIn = declaredIds(node.bo.incoming);
+          const declaredOut = declaredIds(node.bo.outgoing);
+          const realIn = node.inEdges.map(edge => edge.flow).sort();
+          const realOut = node.outEdges.map(edge => edge.flow).sort();
+          if (!sameList(declaredIn, realIn)) {{
+            add('flow-refs-mismatch', id, nodeLabel(node) + ' declara entradas [' + listText(declaredIn)
+              + '], mas os fluxos dizem [' + listText(realIn) + ']');
+          }}
+          if (!sameList(declaredOut, realOut)) {{
+            add('flow-refs-mismatch', id, nodeLabel(node) + ' declara saídas [' + listText(declaredOut)
+              + '], mas os fluxos dizem [' + listText(realOut) + ']');
+          }}
+        }});
+      }},
+      function eventsAndDefaults(model, add) {{
+        model.order.forEach(id => {{
+          const node = model.nodes[id];
+          const label = nodeLabel(node);
+          if (node.tag === 'startEvent' && node.inEdges.length) {{
+            add('start-has-incoming', id, 'O evento de início ' + label + ' recebe fluxo; volte para uma tarefa ou decisão');
+          }}
+          if (node.tag === 'endEvent' && node.outEdges.length) {{
+            add('end-has-outgoing', id, 'O evento de fim ' + label + ' tem fluxo de saída; nada acontece depois de um fim');
+          }}
+          const defaultId = refId(node.bo.default);
+          if (defaultId && !node.outEdges.some(edge => edge.flow === defaultId)) {{
+            add('default-flow-invalid', id, label + ' aponta “' + defaultId + '” como fluxo padrão, mas esse fluxo não sai dele');
+          }}
+          if (node.tag === 'boundaryEvent') {{
+            if (!node.attachedToRef) {{
+              add('boundary-invalid', id, 'O evento de borda ' + label + ' não está preso a nenhuma atividade');
+            }} else {{
+              const host = model.nodes[node.attachedToRef];
+              if (host && ACTIVITY_TAGS.indexOf(host.tag) < 0) {{
+                add('boundary-invalid', id, 'O evento de borda ' + label + ' está preso a um elemento que não é atividade');
+              }}
+            }}
+          }}
+        }});
+      }},
+      function lanes(model, add) {{
+        const laneSet = laneSetOf(model);
+        if (!laneSet) return;
+        const seen = {{}};
+        const covered = new Set();
+        (laneSet.lanes || []).forEach(lane => {{
+          (lane.flowNodeRef || []).forEach(ref => {{
+            if (!ref.id) return;
+            covered.add(ref.id);
+            if (Object.prototype.hasOwnProperty.call(seen, ref.id)) {{
+              add('lane-coverage-duplicate', ref.id, '“' + ref.id + '” está nas raias “' + seen[ref.id]
+                + '” e “' + (lane.name || lane.id) + '”; um elemento pertence a uma única raia');
+            }} else {{
+              seen[ref.id] = lane.name || lane.id;
+            }}
+          }});
+        }});
+        model.order.forEach(id => {{
+          if (!covered.has(id)) {{
+            add('lane-coverage-missing', id, nodeLabel(model.nodes[id]) + ' não está em nenhuma raia');
+          }}
+        }});
+      }},
+      function gateways(model, add) {{
+        model.order.forEach(id => {{
+          const node = model.nodes[id];
+          const label = nodeLabel(node);
+          const isGateway = GATEWAY_TAGS.indexOf(node.tag) >= 0;
+          const ins = node.inEdges.length;
+          const outs = node.outEdges.length;
+          if (!isGateway && outs > 1) {{
+            add('implicit-split', id, label + ' tem ' + outs + ' saídas sem um gateway; não se sabe se são alternativas (XOR) ou paralelas (AND)');
+          }}
+          if (!isGateway && node.tag !== 'endEvent' && ins > 1) {{
+            add('implicit-merge', id, label + ' recebe ' + ins + ' fluxos sem um gateway; não se sabe se espera todos ou roda no primeiro');
+          }}
+          if ((node.tag === 'exclusiveGateway' || node.tag === 'inclusiveGateway') && outs >= 2) {{
+            const defaultId = refId(node.bo.default);
+            const missing = node.outEdges.filter(edge => {{
+              if (edge.flow === defaultId) return false;
+              const flow = model.edges.find(candidate => candidate.id === edge.flow);
+              return flow && !conditionText(flow.bo);
+            }}).map(edge => edge.flow).sort();
+            if (missing.length) {{
+              add('gateway-without-condition', id, label + ' divide sem condição escrita em ' + missing.join(', ')
+                + ' e sem fluxo padrão; o critério da decisão não está registrado');
+            }}
+          }}
+          if (isGateway && ins > 1 && outs > 1) {{
+            add('mixed-gateway', id, label + ' junta ' + ins + ' fluxos e divide em ' + outs
+              + ' ao mesmo tempo; separe em dois gateways');
+          }}
+          if (node.tag === 'parallelGateway' && ins >= 2) {{
+            const seen = new Set();
+            const stack = node.inEdges.map(edge => edge.other);
+            let found = false;
+            while (stack.length && !found) {{
+              const current = stack.pop();
+              if (seen.has(current)) continue;
+              seen.add(current);
+              const other = model.nodes[current];
+              if (!other) continue;
+              if (other.tag === 'parallelGateway' && other.outEdges.length >= 2) {{
+                found = true;
+              }} else {{
+                other.inEdges.forEach(edge => stack.push(edge.other));
+              }}
+            }}
+            if (!found) {{
+              add('parallel-join-without-split', id, label + ' espera ' + ins + ' fluxos sem divisão paralela antes; pode travar para sempre');
+            }}
+          }}
+          if (node.tag === 'parallelGateway' && outs >= 2) {{
+            const seen = new Set();
+            const stack = node.outEdges.map(edge => edge.other);
+            let found = false;
+            while (stack.length && !found) {{
+              const current = stack.pop();
+              if (seen.has(current)) continue;
+              seen.add(current);
+              const other = model.nodes[current];
+              if (!other) continue;
+              if (other.tag === 'parallelGateway' && other.inEdges.length >= 2) {{
+                found = true;
+              }} else {{
+                other.outEdges.forEach(edge => stack.push(edge.other));
+                (model.attachedBoundary[current] || []).forEach(boundary => stack.push(boundary));
+              }}
+            }}
+            if (!found) {{
+              add('parallel-split-without-join', id, label + ' divide em ' + outs
+                + ' ramos sem junção paralela adiante; confirme que os resultados independentes são intencionais');
+            }}
+          }}
+          if (isGateway && ins <= 1 && outs <= 1) {{
+            add('useless-gateway', id, label + ' não divide nem junta; é só um símbolo de decisão numa linha reta');
+          }}
+        }});
+      }},
+      function names(model, add) {{
+        model.order.forEach(id => {{
+          const node = model.nodes[id];
+          const name = node.bo.name || '';
+          if (NAMEABLE_TAGS.indexOf(node.tag) >= 0 && !name.trim()) {{
+            add('unnamed-element', id, '“' + id + '” está sem nome e aparece como caixa vazia');
+          }}
+          if (!ID_CONVENTION.test(id)) {{
+            add('id-convention', id, 'O id “' + id + '” foge do padrão <Tipo>_<Descrição>, o que dificulta ler as mensagens de validação');
+          }}
+          const length = Array.from(name).length;
+          if (length > NAME_LIMIT) {{
+            add('name-too-long', id, 'O nome de “' + id + '” tem ' + length + ' caracteres; acima de ~' + NAME_LIMIT
+              + ' deixa de caber na forma e é cortado nas exportações');
+          }}
+        }});
+      }},
+      function flows(model, add) {{
+        const seen = {{}};
+        model.edges.forEach(edge => {{
+          if (edge.src === edge.tgt) {{
+            add('self-loop', edge.id, '“' + edge.id + '” liga “' + edge.src + '” a ele mesmo; modele o retrabalho com um gateway de volta a uma etapa anterior');
+            return;
+          }}
+          const signature = flowSignature(edge);
+          if (Object.prototype.hasOwnProperty.call(seen, signature)) {{
+            add('duplicate-flow', edge.id, '“' + edge.id + '” repete a ligação ' + edge.src + ' → ' + edge.tgt
+              + ' já feita por “' + seen[signature] + '”, com o mesmo rótulo e condição');
+          }} else {{
+            seen[signature] = edge.id;
+          }}
+        }});
+      }}
+    ];
+
+    // Sobreposição de formas (DI): bandas de raia ficam de fora, só nós de fluxo.
+    function checkOverlaps(models, add) {{
+      const definitions = modeler.getDefinitions ? modeler.getDefinitions() : null;
+      if (!definitions) return;
+      const known = new Set();
+      models.forEach(model => model.order.forEach(id => known.add(id)));
+      const boxes = [];
+      (definitions.diagrams || []).forEach(diagram => {{
+        const plane = diagram.plane;
+        ((plane && plane.planeElement) || []).forEach(shape => {{
+          if (shape.$type !== 'bpmndi:BPMNShape' || !shape.bounds || !shape.bpmnElement) return;
+          if (!known.has(shape.bpmnElement.id)) return;
+          const b = shape.bounds;
+          boxes.push({{ id: shape.bpmnElement.id, x: Number(b.x) || 0, y: Number(b.y) || 0,
+            w: Number(b.width) || 0, h: Number(b.height) || 0 }});
+        }});
       }});
-      return {{ hasLanes: hasLanes, covered: covered }};
+      for (let i = 0; i < boxes.length; i++) {{
+        const a = boxes[i];
+        for (let j = i + 1; j < boxes.length; j++) {{
+          const b = boxes[j];
+          if (a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h) {{
+            add('di-overlap', a.id, 'As formas de “' + a.id + '” e “' + b.id + '” se sobrepõem no canvas; uma esconde a outra');
+          }}
+        }}
+      }}
     }}
 
     function collectValidationFindings() {{
       const findings = [];
-      const nodes = flowNodes();
-      if (!nodes.length) return findings;
-
-      const reaching = reachesAnEnd(nodes);
-      const hasEndEvent = nodes.some(n => n.type === 'bpmn:EndEvent');
-      const lanes = laneMembership();
-
-      nodes.forEach(node => {{
-        const name = (node.businessObject.name || '').trim();
-        const outgoing = outgoingOf(node);
-        const incoming = incomingOf(node);
-
-        if (node.type !== 'bpmn:EndEvent' && outgoing.length === 0) {{
-          findings.push({{ rule: 'dead-end', severity: 'error', id: node.id,
-            message: (name || node.id) + ' não tem fluxo de saída' }});
-        }}
-        if (node.type !== 'bpmn:StartEvent' && node.type !== 'bpmn:BoundaryEvent' && incoming.length === 0) {{
-          findings.push({{ rule: 'unreachable-node', severity: 'error', id: node.id,
-            message: (name || node.id) + ' não recebe nenhum fluxo' }});
-        }}
-        if (hasEndEvent && outgoing.length > 0 && !reaching.has(node.id)) {{
-          findings.push({{ rule: 'no-path-to-end', severity: 'error', id: node.id,
-            message: (name || node.id) + ' nunca alcança um evento de fim' }});
-        }}
-        if ((node.type === 'bpmn:ExclusiveGateway' || node.type === 'bpmn:InclusiveGateway')
-            && outgoing.length > 1) {{
-          const defaultFlow = node.businessObject.default;
-          const missing = outgoing.filter(flow =>
-            (!defaultFlow || flow.id !== defaultFlow.id)
-            && !(flow.conditionExpression && (flow.conditionExpression.body || '').trim())
-          );
-          if (missing.length) {{
-            findings.push({{ rule: 'gateway-without-condition', severity: 'warn', id: node.id,
-              message: (name || node.id) + ' divide sem condição escrita em ' + missing.length + ' saída(s)' }});
-          }}
-        }}
-        if (!name && (GATEWAY_TYPES.indexOf(node.type) >= 0
-            || /Task$/.test(node.type) || node.type === 'bpmn:StartEvent' || node.type === 'bpmn:EndEvent')) {{
-          findings.push({{ rule: 'unnamed-element', severity: 'warn', id: node.id,
-            message: node.id + ' está sem nome e renderiza como caixa vazia' }});
-        }}
-        if (lanes.hasLanes && !lanes.covered.has(node.id)) {{
-          findings.push({{ rule: 'lane-coverage-missing', severity: 'warn', id: node.id,
-            message: (name || node.id) + ' não está em nenhuma raia' }});
-        }}
-      }});
-
-      return findings;
+      const add = (rule, id, message) => {{
+        findings.push({{ rule: rule, severity: RULE_SEVERITY[rule], id: id, message: message }});
+      }};
+      const models = buildProcessModels();
+      models.forEach(model => PROCESS_CHECKS.forEach(check => check(model, add)));
+      checkOverlaps(models, add);
+      // Erros primeiro, depois avisos e informações; dentro de cada um, a ordem das regras.
+      const ruleIndex = {{}};
+      VALIDATION_RULES.forEach((entry, index) => {{ ruleIndex[entry.rule] = index; }});
+      return findings
+        .map((finding, index) => ({{ finding: finding, index: index }}))
+        .sort((a, b) => (SEVERITY_ORDER.indexOf(a.finding.severity) - SEVERITY_ORDER.indexOf(b.finding.severity))
+          || (ruleIndex[a.finding.rule] - ruleIndex[b.finding.rule]) || (a.index - b.index))
+        .map(entry => entry.finding);
     }}
 
     function selectValidationFinding(elementId) {{
       try {{
+        if (!elementId) {{
+          showToast('Este achado se refere ao processo como um todo');
+          return;
+        }}
         const element = modeler.get('elementRegistry').get(elementId);
-        if (!element) return;
+        if (!element) {{
+          showToast('Este elemento não está desenhado no canvas');
+          return;
+        }}
         modeler.get('selection').select(element);
         modeler.get('canvas').scrollToElement(element);
       }} catch (e) {{}}
     }}
 
-    function runDiagramValidation() {{
-      validationResults.innerHTML = '';
-      let findings = [];
-      try {{
-        findings = collectValidationFindings();
-      }} catch (e) {{
-        showError(e);
-        return;
-      }}
+    // ---------------------------------------------------------------------
+    // Painel, contador e marcadores (F3.2 e F3.3)
+    // ---------------------------------------------------------------------
+    const validationSummary = document.getElementById('validation-summary');
+    const validationFilters = document.getElementById('validation-filters');
+    const btnFix = document.getElementById('btn-fix');
+    const fixPreviewList = document.getElementById('fix-preview-list');
+    const VALIDATION_DEBOUNCE_MS = 400;
+    let validationFindings = [];
+    let validationFilter = 'all';
+    let validationTimer = null;
+    let validationMarks = {{}};      // id do elemento -> severidade mais grave
+    let validationMarksApplied = false;
 
+    function countBySeverity(findings) {{
+      const counts = {{ error: 0, warn: 0, info: 0 }};
+      findings.forEach(finding => {{ counts[finding.severity] += 1; }});
+      return counts;
+    }}
+
+    function countText(count, severity) {{
+      const label = SEVERITY_LABEL[severity];
+      return count + ' ' + (count === 1 ? label.singular : label.plural);
+    }}
+
+    function updateValidationSummary(counts) {{
+      const total = counts.error + counts.warn + counts.info;
+      validationSummary.dataset.errors = String(counts.error);
+      validationSummary.dataset.warnings = String(counts.warn);
+      validationSummary.dataset.infos = String(counts.info);
+      validationSummary.dataset.state = total === 0 ? 'ok' : (counts.error ? 'error' : (counts.warn ? 'warn' : 'info'));
+      document.getElementById('vs-error').textContent = String(counts.error);
+      document.getElementById('vs-warn').textContent = String(counts.warn);
+      document.getElementById('vs-info').textContent = String(counts.info);
+      validationSummary.setAttribute('aria-label', total === 0
+        ? 'Validação: nenhum problema. Abrir o painel de validação'
+        : 'Validação: ' + SEVERITY_ORDER.map(sev => countText(counts[sev], sev)).join(', ')
+          + '. Abrir o painel de validação');
+    }}
+
+    function updateValidationFilters(counts) {{
+      const total = counts.error + counts.warn + counts.info;
+      validationFilters.querySelectorAll('[data-severity-filter]').forEach(button => {{
+        const key = button.getAttribute('data-severity-filter');
+        const value = key === 'all' ? total : counts[key];
+        button.querySelector('.count').textContent = String(value);
+        button.setAttribute('aria-pressed', key === validationFilter ? 'true' : 'false');
+      }});
+    }}
+
+    function renderValidationResults(findings) {{
+      validationResults.innerHTML = '';
       if (!findings.length) {{
         const ok = document.createElement('div');
         ok.className = 'validation-ok';
@@ -2952,23 +3516,294 @@ def render_editor_html(vendor_dir=None):
         validationResults.appendChild(ok);
         return;
       }}
-
-      findings.forEach(finding => {{
+      const visible = findings.filter(finding => validationFilter === 'all' || finding.severity === validationFilter);
+      if (!visible.length) {{
+        const none = document.createElement('div');
+        none.className = 'validation-empty';
+        none.textContent = 'Nenhum achado com esta severidade.';
+        validationResults.appendChild(none);
+        return;
+      }}
+      visible.forEach(finding => {{
+        const label = SEVERITY_LABEL[finding.severity];
         const item = document.createElement('button');
+        item.type = 'button';
         item.className = 'validation-finding ' + finding.severity;
-        item.title = 'Clique para selecionar o elemento no diagrama';
+        item.setAttribute('data-rule', finding.rule);
+        item.setAttribute('data-severity', finding.severity);
+        if (finding.id) item.setAttribute('data-element', finding.id);
+        item.title = finding.id ? 'Clique para selecionar o elemento no diagrama' : 'Achado do processo como um todo';
         const rule = document.createElement('span');
         rule.className = 'rule';
-        rule.textContent = finding.severity + ' · ' + finding.rule;
+        rule.textContent = label.icon + ' ' + finding.severity + ' · ' + finding.rule;
         item.appendChild(rule);
         item.appendChild(document.createTextNode(finding.message));
         item.addEventListener('click', () => selectValidationFinding(finding.id));
         validationResults.appendChild(item);
       }});
-      showToast(findings.length + ' achado(s) de validação');
+    }}
+
+    function clearValidationMarkers() {{
+      const canvas = modeler.get('canvas');
+      Object.keys(validationMarks).forEach(id => {{
+        SEVERITY_ORDER.forEach(sev => {{
+          try {{ canvas.removeMarker(id, 'vld-' + sev); }} catch (e) {{}}
+        }});
+      }});
+      try {{ modeler.get('overlays').remove({{ type: 'validation' }}); }} catch (e) {{}}
+      validationMarksApplied = false;
+    }}
+
+    // Contorno colorido (classe no <g> do elemento) + selo com ícone (overlay HTML,
+    // fora do SVG). Nenhum dos dois entra no XML nem no histórico de desfazer.
+    function applyValidationMarkers(marks) {{
+      const canvas = modeler.get('canvas');
+      const overlays = modeler.get('overlays');
+      const registry = modeler.get('elementRegistry');
+      const rulesById = {{}};
+      validationFindings.forEach(finding => {{
+        if (!finding.id || finding.severity === 'info') return;
+        (rulesById[finding.id] = rulesById[finding.id] || []).push(SEVERITY_LABEL[finding.severity].title + ': ' + finding.rule);
+      }});
+      Object.keys(marks).forEach(id => {{
+        const element = registry.get(id);
+        if (!element) return;
+        const severity = marks[id];
+        try {{
+          canvas.addMarker(id, 'vld-' + severity);
+          const badge = document.createElement('span');
+          badge.className = 'vld-badge vld-badge-' + severity;
+          badge.setAttribute('role', 'img');
+          const description = 'Problema de validação — ' + (rulesById[id] || []).join('; ');
+          badge.setAttribute('aria-label', description);
+          badge.title = description;
+          badge.textContent = SEVERITY_LABEL[severity].icon;
+          overlays.add(id, 'validation', {{ position: {{ top: -10, left: -10 }}, html: badge, scale: false }});
+        }} catch (e) {{}}
+      }});
+      validationMarksApplied = true;
+    }}
+
+    function computeValidationMarks(findings) {{
+      const marks = {{}};
+      findings.forEach(finding => {{
+        if (!finding.id || finding.severity === 'info') return;
+        const current = marks[finding.id];
+        if (!current || SEVERITY_ORDER.indexOf(finding.severity) < SEVERITY_ORDER.indexOf(current)) {{
+          marks[finding.id] = finding.severity;
+        }}
+      }});
+      return marks;
+    }}
+
+    // As exportações (SVG/PNG) saem sem os marcadores de validação.
+    async function withoutValidationMarkers(work) {{
+      const hadMarks = validationMarksApplied;
+      if (hadMarks) clearValidationMarkers();
+      try {{
+        return await work();
+      }} finally {{
+        if (hadMarks) applyValidationMarkers(validationMarks);
+      }}
+    }}
+
+    // Quantas vezes a validação rodou (os testes conferem o debounce por aqui).
+    let validationRuns = 0;
+    function getValidationRuns() {{
+      return validationRuns;
+    }}
+
+    function refreshValidation() {{
+      let findings;
+      validationRuns += 1;
+      try {{
+        findings = collectValidationFindings();
+      }} catch (e) {{
+        console.warn('Validação indisponível:', e);
+        return null;
+      }}
+      clearValidationMarkers();
+      validationFindings = findings;
+      validationMarks = computeValidationMarks(findings);
+      const counts = countBySeverity(findings);
+      updateValidationSummary(counts);
+      updateValidationFilters(counts);
+      renderValidationResults(findings);
+      applyValidationMarkers(validationMarks);
+      updateFixButton();
+      return findings;
+    }}
+
+    // Debounce: qualquer alteração reinicia a contagem, então digitar não dispara
+    // uma validação por tecla; os marcadores não geram eventos, logo não há laço.
+    function scheduleValidation() {{
+      if (validationTimer) clearTimeout(validationTimer);
+      validationTimer = setTimeout(() => {{
+        validationTimer = null;
+        refreshValidation();
+      }}, VALIDATION_DEBOUNCE_MS);
+    }}
+
+    function runDiagramValidation() {{
+      if (validationTimer) {{
+        clearTimeout(validationTimer);
+        validationTimer = null;
+      }}
+      const findings = refreshValidation();
+      if (findings === null) {{
+        showError('Não foi possível validar o diagrama.');
+        return;
+      }}
+      if (findings.length) showToast(findings.length + ' achado(s) de validação');
     }}
 
     btnValidate.addEventListener('click', runDiagramValidation);
+
+    validationFilters.addEventListener('click', (event) => {{
+      const button = event.target.closest('[data-severity-filter]');
+      if (!button) return;
+      validationFilter = button.getAttribute('data-severity-filter');
+      updateValidationFilters(countBySeverity(validationFindings));
+      renderValidationResults(validationFindings);
+    }});
+
+    validationSummary.addEventListener('click', () => {{
+      if (propertiesPanel.classList.contains('hidden')) {{
+        propertiesPanel.classList.remove('hidden');
+        btnPropsToggle.setAttribute('aria-pressed', 'true');
+      }}
+      const section = document.getElementById('validation-section');
+      section.scrollIntoView({{ block: 'nearest' }});
+      const first = validationResults.querySelector('.validation-finding') || btnValidate;
+      first.focus();
+    }});
+
+    modeler.on('import.done', () => {{
+      validationMarks = {{}};
+      validationMarksApplied = false;
+      scheduleValidation();
+    }});
+    modeler.on('commandStack.changed', scheduleValidation);
+
+    // ---------------------------------------------------------------------
+    // Corrigir (F3.4): só bookkeeping mecânico, como `bpmn_tool.py fix` — nunca
+    // cria nós, fluxos, condições nem nomes. Prévia primeiro; ao confirmar, tudo
+    // vai em UM comando composto (um Ctrl+Z desfaz o conjunto).
+    // ---------------------------------------------------------------------
+    function buildFixPlan() {{
+      const registry = modeler.get('elementRegistry');
+      const lines = [];
+      const commands = [];
+      const defaults = [];
+      const removals = [];
+      const refUpdates = [];
+      buildProcessModels().forEach(model => {{
+        const removed = {{}};
+        const seen = {{}};
+        model.edges.forEach(edge => {{
+          if (edge.src === edge.tgt) return;
+          const signature = flowSignature(edge);
+          if (!Object.prototype.hasOwnProperty.call(seen, signature)) {{
+            seen[signature] = edge.id;
+            return;
+          }}
+          const connection = registry.get(edge.id);
+          if (!connection) return;
+          removed[edge.id] = seen[signature];
+          removals.push({{ cmd: 'connection.delete', context: {{ connection: connection }} }});
+          lines.push('Remover o fluxo duplicado “' + edge.id + '” (' + edge.src + ' → ' + edge.tgt
+            + '), idêntico a “' + seen[signature] + '” até no rótulo e na condição');
+        }});
+        const survivorOf = (flowId) => model.edges.find(edge => edge.id === flowId);
+        model.order.forEach(id => {{
+          const node = model.nodes[id];
+          const defaultId = refId(node.bo.default);
+          if (defaultId && removed[defaultId]) {{
+            const shape = registry.get(id);
+            const survivor = survivorOf(removed[defaultId]);
+            if (shape && survivor) {{
+              defaults.push({{ cmd: 'element.updateProperties',
+                context: {{ element: shape, properties: {{ default: survivor.bo }} }} }});
+              lines.push('O fluxo padrão de “' + id + '” passa de “' + defaultId + '” para “' + removed[defaultId] + '”');
+            }}
+          }}
+          const shape = registry.get(id);
+          if (!shape) return;
+          const kept = (list) => list.filter(edge => !removed[edge.flow]);
+          const realIn = kept(node.inEdges).map(edge => edge.flow).sort();
+          const realOut = kept(node.outEdges).map(edge => edge.flow).sort();
+          const declaredIn = declaredIds(node.bo.incoming).filter(flow => !removed[flow]);
+          const declaredOut = declaredIds(node.bo.outgoing).filter(flow => !removed[flow]);
+          const flowBos = (ids) => ids.map(flowId => (survivorOf(flowId) || {{}}).bo).filter(Boolean);
+          const properties = {{}};
+          if (!sameList(declaredIn, realIn)) {{
+            properties.incoming = flowBos(realIn);
+            lines.push('Refazer as entradas de “' + id + '” a partir dos fluxos: [' + listText(declaredIn)
+              + '] vira [' + listText(realIn) + ']');
+          }}
+          if (!sameList(declaredOut, realOut)) {{
+            properties.outgoing = flowBos(realOut);
+            lines.push('Refazer as saídas de “' + id + '” a partir dos fluxos: [' + listText(declaredOut)
+              + '] vira [' + listText(realOut) + ']');
+          }}
+          if (Object.keys(properties).length) {{
+            refUpdates.push({{ cmd: 'element.updateModdleProperties',
+              context: {{ element: shape, moddleElement: node.bo, properties: properties }} }});
+          }}
+        }});
+      }});
+      // Ordem: mover o padrão para o fluxo que fica, remover duplicados, refazer as listas.
+      return {{ lines: lines, commands: defaults.concat(removals, refUpdates) }};
+    }}
+
+    function updateFixButton() {{
+      let plan = {{ lines: [], commands: [] }};
+      try {{
+        plan = buildFixPlan();
+      }} catch (e) {{
+        console.warn('Plano de correção indisponível:', e);
+      }}
+      const count = plan.lines.length;
+      btnFix.disabled = count === 0;
+      btnFix.setAttribute('aria-label', count === 0
+        ? 'Corrigir problemas: nada a corrigir automaticamente'
+        : 'Corrigir ' + count + ' problema(s) automaticamente, com prévia');
+      btnFix.querySelector('.fix-count').textContent = count ? ' (' + count + ')' : '';
+      return plan;
+    }}
+
+    function openFixPreview() {{
+      const plan = updateFixButton();
+      if (!plan.commands.length) {{
+        showToast('Nada a corrigir automaticamente');
+        return;
+      }}
+      fixPreviewList.innerHTML = '';
+      plan.lines.forEach(text => {{
+        const li = document.createElement('li');
+        li.textContent = text;
+        fixPreviewList.appendChild(li);
+      }});
+      openDialog(fixDialog, '#fix-apply');
+    }}
+
+    function applyFixes() {{
+      const plan = buildFixPlan();
+      closeDialog(fixDialog);
+      if (!plan.commands.length) return;
+      try {{
+        modeler.get('commandStack').execute('editor.multiCommand', plan.commands);
+      }} catch (e) {{
+        showError(e);
+        return;
+      }}
+      refreshValidation();
+      showToast(plan.lines.length + ' correção(ões) aplicada(s). Ctrl+Z desfaz tudo de uma vez.');
+    }}
+
+    btnFix.addEventListener('click', openFixPreview);
+    document.getElementById('fix-apply').addEventListener('click', applyFixes);
+    document.getElementById('fix-cancel').addEventListener('click', () => closeDialog(fixDialog));
 
     // ---------------------------------------------------------------------
     // Alinhar / distribuir (módulos nativos do bpmn-js) e impressão em PDF
@@ -3743,7 +4578,7 @@ def render_editor_html(vendor_dir=None):
     async function exportSVG() {{
       try {{
         applyDiagramFont();
-        const {{ svg }} = await modeler.saveSVG({{ format: true }});
+        const {{ svg }} = await withoutValidationMarkers(() => modeler.saveSVG({{ format: true }}));
         const blob = new Blob([svg], {{ type: 'image/svg+xml;charset=utf-8' }});
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -3764,7 +4599,7 @@ def render_editor_html(vendor_dir=None):
     async function exportPNG() {{
       try {{
         applyDiagramFont();
-        const {{ svg }} = await modeler.saveSVG();
+        const {{ svg }} = await withoutValidationMarkers(() => modeler.saveSVG());
         const img = new Image();
         const svgBlob = new Blob([svg], {{ type: 'image/svg+xml;charset=utf-8' }});
         const url = URL.createObjectURL(svgBlob);
