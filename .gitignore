@@ -24,14 +24,21 @@ tests/*.html
 *.swp
 *.swo
 
-# Configurações locais de agentes e harness
-.claude/
-.harness/scratch/
-.harness/work/
-.harness/*.json
+# Configurações locais de agentes e harness (gauntlet)
+.claude/*
+!.claude/harness/
+.claude/harness/*.new
 
 # Arquivos do Sistema Operacional
 .DS_Store
 Thumbs.db
 ehthumbs.db
 [Dd]esktop.ini
+
+# harness
+.gauntlet/inbox/
+.gauntlet/history/
+.gauntlet/scorecard.json
+.gauntlet/*.tmp
+.claude/harness/debug.log
+.claude/settings.local.json
