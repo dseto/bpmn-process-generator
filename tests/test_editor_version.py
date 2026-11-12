@@ -51,6 +51,12 @@ def test_the_editor_version_was_bumped_for_the_more_intuitive_round():
     assert (major, minor) >= (1, 3)
 
 
+def test_the_editor_version_was_bumped_for_the_live_validation_round():
+    """Fase 3A (live validation, canvas markers, the Corrigir button) is 1.4.0 or later."""
+    major, minor, _patch = (int(part) for part in generate_editor_html.EDITOR_VERSION.split("."))
+    assert (major, minor) >= (1, 4)
+
+
 def test_the_committed_editor_carries_the_version_meta_tag():
     html = EDITOR.read_text(encoding="utf-8")
     assert EDITOR_VERSION_META in html
