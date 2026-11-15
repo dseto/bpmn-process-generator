@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="bpmn-editor-version" content="1.4.0" />
+<meta name="bpmn-editor-version" content="1.5.0" />
 <meta name="bpmn-editor-hash" content="" />
 <title>BPMN Editor Central</title>
 <meta name="bpmn-editor-assets" content="cdn" />
@@ -497,6 +497,95 @@
   @media print {
     .vld-badge { display: none !important; }
   }
+  @media print {
+    .rev-badge { display: none !important; }
+  }
+
+  /* Comentários de revisão (F3.7): selo roxo no canto superior DIREITO (o da validação fica no esquerdo). */
+  #status-footer #review-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 1px solid #334155;
+    border-radius: 6px;
+    color: #e2e8f0;
+    cursor: pointer;
+  }
+  #review-summary:hover { background: #1e293b; }
+  #review-summary[data-state="pending"] { border-color: #a78bfa; }
+  #review-summary b { font-variant-numeric: tabular-nums; color: #ddd6fe; }
+  @media screen {
+    .rev-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      border: 2px solid #ffffff;
+      background: #5b21b6;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.3;
+      white-space: nowrap;
+      box-shadow: 0 1px 3px rgba(15,23,42,0.5);
+      pointer-events: none;
+    }
+  }
+  #review-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 12px;
+    margin-top: 12px;
+  }
+  #review-section h3, #review-orphans h2 {
+    margin: 0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #475569;
+  }
+  #review-orphans {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-top: 1px solid #e2e8f0;
+    padding-top: 12px;
+    margin-top: 12px;
+  }
+  #review-orphans[hidden] { display: none; }
+  .review-hint { margin: 0; font-size: 12px; color: #475569; line-height: 1.4; }
+  .review-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .review-item {
+    padding: 8px 10px;
+    border: 1px solid #e2e8f0;
+    border-left: 4px solid #6d28d9;
+    border-radius: 6px;
+    background: #ffffff;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #0f172a;
+  }
+  .review-item[data-resolved="true"] { border-left-color: #15803d; background: #f1f5f9; }
+  .review-item[data-resolved="true"] .review-text { text-decoration: line-through; color: #475569; }
+  .review-meta { font-size: 11px; color: #475569; overflow-wrap: anywhere; }
+  .review-state { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #dcfce7; color: #166534; font-weight: 700; }
+  .review-text { margin: 4px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .review-actions { display: flex; gap: 6px; }
+  .review-actions button {
+    padding: 2px 8px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .review-actions button:hover { background: #e2e8f0; }
+  .review-empty { font-size: 12px; color: #475569; }
 
   @media print {
     @page {
@@ -661,6 +750,8 @@
     top: calc(100% + 4px);
     left: 0;
     min-width: 240px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -885,6 +976,12 @@
         <button type="button" role="menuitem" id="btn-export-png" title="Exportar imagem em alta resolução (.png)">📷 Exportar PNG</button>
         <button type="button" role="menuitem" id="btn-export-pdf" title="Imprimir o diagrama (escolha &quot;Salvar como PDF&quot;)">🖨️ Exportar PDF</button>
         <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" id="btn-import-spec" title="Gerar um diagrama novo, já organizado, a partir de um spec JSON (formato da skill)">🧩 Importar spec JSON…</button>
+        <button type="button" role="menuitem" id="btn-export-spec" title="Salvar o diagrama aberto como spec JSON (nome-spec.json), o formato que a skill reconstrói">📤 Exportar spec JSON</button>
+        <div class="menu-sep" role="separator"></div>
+        <button type="button" role="menuitem" id="btn-save-comments" title="Salvar os comentários de revisão em nome.review.json (o .bpmn não muda)">💬 Salvar comentários</button>
+        <button type="button" role="menuitem" id="btn-open-comments" title="Abrir um arquivo .review.json de comentários de revisão">📂 Abrir comentários…</button>
+        <div class="menu-sep" role="separator"></div>
         <div class="menu-row">
           <label for="preset-select">Exemplos</label>
           <!--PRESET_SELECT_START-->
@@ -911,6 +1008,7 @@
         <div class="menu-sep" role="separator"></div>
         <button type="button" role="menuitem" id="btn-search" title="Localizar elementos no diagrama (Ctrl+F)">🔍 Buscar no diagrama <span class="kbd">Ctrl+F</span></button>
         <button type="button" role="menuitem" id="btn-route-90" title="Alinhar conexões selecionadas (ou todas) em ângulos ortogonais de 90°">📐 Curva 90° nas conexões</button>
+        <button type="button" role="menuitem" id="btn-auto-layout" aria-label="Organizar automaticamente o diagrama" title="Reposicionar todos os elementos como o comando layout da skill (um Ctrl+Z desfaz tudo)">🧭 Organizar automaticamente</button>
       </div>
     </div>
 
@@ -953,6 +1051,8 @@
 </header>
 
 <input type="file" id="file-input" accept=".bpmn,.xml" style="display:none" />
+<input type="file" id="spec-input" accept=".json,application/json" style="display:none" aria-label="Escolher o spec JSON a importar" />
+<input type="file" id="comments-input" accept=".json,application/json" style="display:none" aria-label="Escolher o arquivo de comentários de revisão" />
 
 <div id="error-banner"></div>
 <div id="notice-banner" role="status" aria-live="polite"></div>
@@ -1104,6 +1204,20 @@
           Fluxo padrão (quando nenhuma condição for atendida)
         </label>
       </div>
+      <section id="review-section" aria-labelledby="review-title">
+        <h3 id="review-title">Comentários de revisão</h3>
+        <p class="review-hint">Ficam num arquivo à parte (<code>.review.json</code>): não alteram o .bpmn nem o histórico de desfazer.</p>
+        <ul id="review-list" class="review-list" aria-label="Comentários deste elemento"></ul>
+        <div class="prop-field">
+          <label for="review-author">Autor (opcional)</label>
+          <input type="text" id="review-author" placeholder="Seu nome" autocomplete="name" />
+        </div>
+        <div class="prop-field">
+          <label for="review-text">Novo comentário</label>
+          <textarea id="review-text" placeholder="Pergunta, dúvida ou pedido de ajuste (Ctrl+Enter adiciona)"></textarea>
+        </div>
+        <button type="button" id="review-add" class="btn-action">💬 Adicionar comentário</button>
+      </section>
     </div>
 
     <div id="validation-section">
@@ -1125,6 +1239,12 @@
       </div>
       <div id="validation-results"></div>
     </div>
+
+    <div id="review-orphans" hidden>
+      <h2>Comentários órfãos</h2>
+      <p class="validation-hint">Estes comentários apontam para elementos que não existem mais no diagrama. Foram preservados: restaure o elemento (Ctrl+Z) ou exclua o comentário.</p>
+      <ul id="review-orphans-list" class="review-list" aria-label="Comentários órfãos"></ul>
+    </div>
   </aside>
 </div>
 
@@ -1134,6 +1254,9 @@
     <span class="vs vs-error"><span aria-hidden="true">✖</span> <b id="vs-error">0</b> erros</span>
     <span class="vs vs-warn"><span aria-hidden="true">▲</span> <b id="vs-warn">0</b> avisos</span>
     <span class="vs vs-info"><span aria-hidden="true">ℹ</span> <b id="vs-info">0</b> infos</span>
+  </button>
+  <button type="button" id="review-summary" data-state="none" aria-label="Comentários de revisão: 0 abertos, 0 órfãos. Ir para os comentários" title="Comentários de revisão em aberto (arquivo lateral .review.json): clique para ir ao primeiro">
+    <span aria-hidden="true">💬</span> <b id="rv-open">0</b> abertos <span class="rv-sep" aria-hidden="true">·</span> <b id="rv-orphans">0</b> órfãos
   </button>
   <span class="footer-spacer"></span>
   <span id="zoom-percent" aria-label="Zoom atual" title="Zoom atual">100%</span>
@@ -1203,6 +1326,907 @@
   const PRESETS = {"_blank": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"\n                  xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\"\n                  xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\"\n                  xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\"\n                  xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n                  id=\"Definitions_NewProcess\"\n                  targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_Novo\" name=\"Novo Processo\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"Start_1\" name=\"Início\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_Novo\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Process_Novo\" bpmnElement=\"Process_Novo\">\n      <bpmndi:BPMNShape id=\"Start_1_di\" bpmnElement=\"Start_1\">\n        <omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "06-bus-boarding-process.bpmn": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" id=\"Definitions_BusBoarding\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_BusBoarding\" name=\"Fluxo de Embarque e Viagem de Ônibus\" isExecutable=\"false\">\n    \n    <bpmn:laneSet id=\"LaneSet_BusTrip\">\n      <bpmn:lane id=\"Lane_Passenger\" name=\"Passageiro\">\n        <bpmn:flowNodeRef>Start_PassengerAtStop</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_SignalBus</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_BoardBus</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_PaymentMethod</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_TapSmartCard</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_FallbackCash</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_CashEntry</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_PayWithCash</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_PassTurnstile</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_SeatAvailable</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_SitInSeat</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_TravelStanding</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_MergePosture</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_PressStopButton</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_DisembarkBus</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>End_TripCompleted</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>End_MissedBusFull</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>End_LeftNoFunds</bpmn:flowNodeRef>\n      </bpmn:lane>\n\n      <bpmn:lane id=\"Lane_Driver\" name=\"Motorista\">\n        <bpmn:flowNodeRef>Task_CheckCapacity</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_IsBusFull</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_BypassStop</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_ParkAtStop</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_ResumeRoute</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_StopAtDestination</bpmn:flowNodeRef>\n      </bpmn:lane>\n\n      <bpmn:lane id=\"Lane_FareCollector\" name=\"Cobrador\">\n        <bpmn:flowNodeRef>Task_ReceiveCash</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_HasChange</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_CalculateAndReturnChange</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_UnableToGiveChange</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_AuthorizeTurnstileManual</bpmn:flowNodeRef>\n      </bpmn:lane>\n\n      <bpmn:lane id=\"Lane_BusSystem\" name=\"Sistema do Ônibus\">\n        <bpmn:flowNodeRef>Task_OpenFrontDoors</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_ValidateCardBalance</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_CardBalanceCheck</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_DeductFare</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_AlertInsufficientBalance</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_TurnstileRelease</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_UnlockTurnstile</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_CloseDoors</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_TriggerStopIndicator</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_OpenRearDoors</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n\n    \n    <bpmn:startEvent id=\"Start_PassengerAtStop\" name=\"Passageiro aguarda no ponto\">\n      <bpmn:outgoing>Flow_StartToSignal</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_SignalBus\" name=\"Dar sinal de parada para o ônibus\">\n      <bpmn:incoming>Flow_StartToSignal</bpmn:incoming>\n      <bpmn:outgoing>Flow_SignalToCheck</bpmn:outgoing>\n    </bpmn:userTask>\n\n    \n    <bpmn:userTask id=\"Task_CheckCapacity\" name=\"Avaliar capacidade e lotação do veículo\">\n      <bpmn:incoming>Flow_SignalToCheck</bpmn:incoming>\n      <bpmn:outgoing>Flow_CheckToFullGateway</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_IsBusFull\" name=\"Ônibus com lotação máxima?\">\n      <bpmn:incoming>Flow_CheckToFullGateway</bpmn:incoming>\n      <bpmn:outgoing>Flow_BusFullYes</bpmn:outgoing>\n      <bpmn:outgoing>Flow_BusFullNo</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_BypassStop\" name=\"Sinalizar lotação e seguir viagem sem parar\">\n      <bpmn:incoming>Flow_BusFullYes</bpmn:incoming>\n      <bpmn:outgoing>Flow_BypassToEnd</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_MissedBusFull\" name=\"Passageiro aguarda o próximo ônibus\">\n      <bpmn:incoming>Flow_BypassToEnd</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_ParkAtStop\" name=\"Desacelerar e encostar o ônibus no ponto\">\n      <bpmn:incoming>Flow_BusFullNo</bpmn:incoming>\n      <bpmn:outgoing>Flow_ParkToOpenDoors</bpmn:outgoing>\n    </bpmn:userTask>\n\n    \n    <bpmn:serviceTask id=\"Task_OpenFrontDoors\" name=\"Abrir portas dianteiras de embarque\">\n      <bpmn:incoming>Flow_ParkToOpenDoors</bpmn:incoming>\n      <bpmn:outgoing>Flow_DoorsToBoard</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_BoardBus\" name=\"Subir os degraus e entrar no ônibus\">\n      <bpmn:incoming>Flow_DoorsToBoard</bpmn:incoming>\n      <bpmn:outgoing>Flow_BoardToPayGateway</bpmn:outgoing>\n    </bpmn:userTask>\n\n    \n    <bpmn:exclusiveGateway id=\"Gateway_PaymentMethod\" name=\"Qual a forma de pagamento?\">\n      <bpmn:incoming>Flow_BoardToPayGateway</bpmn:incoming>\n      <bpmn:outgoing>Flow_PayByCard</bpmn:outgoing>\n      <bpmn:outgoing>Flow_PayByCash</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n\n    \n    <bpmn:userTask id=\"Task_TapSmartCard\" name=\"Aproximar cartão de transporte no validador\">\n      <bpmn:incoming>Flow_PayByCard</bpmn:incoming>\n      <bpmn:outgoing>Flow_TapToValidate</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:serviceTask id=\"Task_ValidateCardBalance\" name=\"Ler chip e verificar saldo disponível\">\n      <bpmn:incoming>Flow_TapToValidate</bpmn:incoming>\n      <bpmn:outgoing>Flow_ValidateToBalanceGateway</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:exclusiveGateway id=\"Gateway_CardBalanceCheck\" name=\"Saldo é suficiente?\">\n      <bpmn:incoming>Flow_ValidateToBalanceGateway</bpmn:incoming>\n      <bpmn:outgoing>Flow_BalanceSufficient</bpmn:outgoing>\n      <bpmn:outgoing>Flow_BalanceInsufficient</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:serviceTask id=\"Task_DeductFare\" name=\"Debitar tarifa e registrar integração\">\n      <bpmn:incoming>Flow_BalanceSufficient</bpmn:incoming>\n      <bpmn:outgoing>Flow_DeductToUnlock</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:serviceTask id=\"Task_AlertInsufficientBalance\" name=\"Emitir sinal sonoro de saldo insuficiente\">\n      <bpmn:incoming>Flow_BalanceInsufficient</bpmn:incoming>\n      <bpmn:outgoing>Flow_AlertToFallback</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:exclusiveGateway id=\"Gateway_FallbackCash\" name=\"Passageiro tem dinheiro em espécie?\">\n      <bpmn:incoming>Flow_AlertToFallback</bpmn:incoming>\n      <bpmn:outgoing>Flow_HasFallbackCash</bpmn:outgoing>\n      <bpmn:outgoing>Flow_NoFallbackCash</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n\n    \n    <bpmn:exclusiveGateway id=\"Gateway_CashEntry\" name=\"Pagamento em espécie\">\n      <bpmn:incoming>Flow_PayByCash</bpmn:incoming>\n      <bpmn:incoming>Flow_HasFallbackCash</bpmn:incoming>\n      <bpmn:outgoing>Flow_CashEntryToPay</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_PayWithCash\" name=\"Entregar notas/moedas ao cobrador\">\n      <bpmn:incoming>Flow_CashEntryToPay</bpmn:incoming>\n      <bpmn:outgoing>Flow_PayToReceiveCash</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_ReceiveCash\" name=\"Conferir valor da tarifa recebida\">\n      <bpmn:incoming>Flow_PayToReceiveCash</bpmn:incoming>\n      <bpmn:outgoing>Flow_ReceiveToChangeGateway</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_HasChange\" name=\"Valor exato ou cobrador tem troco?\">\n      <bpmn:incoming>Flow_ReceiveToChangeGateway</bpmn:incoming>\n      <bpmn:outgoing>Flow_ChangeAvailable</bpmn:outgoing>\n      <bpmn:outgoing>Flow_ChangeUnavailable</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_CalculateAndReturnChange\" name=\"Calcular troco e devolver ao passageiro\">\n      <bpmn:incoming>Flow_ChangeAvailable</bpmn:incoming>\n      <bpmn:outgoing>Flow_ChangeToAuthorize</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_AuthorizeTurnstileManual\" name=\"Pressionar botão de liberação da catraca\">\n      <bpmn:incoming>Flow_ChangeToAuthorize</bpmn:incoming>\n      <bpmn:outgoing>Flow_AuthorizeToUnlock</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_UnableToGiveChange\" name=\"Informar impossibilidade de troco e solicitar desembarque\">\n      <bpmn:incoming>Flow_ChangeUnavailable</bpmn:incoming>\n      <bpmn:outgoing>Flow_NoChangeToEnd</bpmn:outgoing>\n    </bpmn:userTask>\n\n    \n    <bpmn:endEvent id=\"End_LeftNoFunds\" name=\"Passageiro desembarca sem pagar tarifa\">\n      <bpmn:incoming>Flow_NoFallbackCash</bpmn:incoming>\n      <bpmn:incoming>Flow_NoChangeToEnd</bpmn:incoming>\n    </bpmn:endEvent>\n\n    \n    <bpmn:exclusiveGateway id=\"Gateway_TurnstileRelease\" name=\"Tarifa quitada\">\n      <bpmn:incoming>Flow_DeductToUnlock</bpmn:incoming>\n      <bpmn:incoming>Flow_AuthorizeToUnlock</bpmn:incoming>\n      <bpmn:outgoing>Flow_ReleaseToUnlock</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:serviceTask id=\"Task_UnlockTurnstile\" name=\"Destravar catraca do ônibus\">\n      <bpmn:incoming>Flow_ReleaseToUnlock</bpmn:incoming>\n      <bpmn:outgoing>Flow_UnlockToPass</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_PassTurnstile\" name=\"Girar a catraca e acessar o salão de passageiros\">\n      <bpmn:incoming>Flow_UnlockToPass</bpmn:incoming>\n      <bpmn:outgoing>Flow_PassToCloseDoors</bpmn:outgoing>\n    </bpmn:userTask>\n\n    \n    <bpmn:serviceTask id=\"Task_CloseDoors\" name=\"Fechar portas dianteiras\">\n      <bpmn:incoming>Flow_PassToCloseDoors</bpmn:incoming>\n      <bpmn:outgoing>Flow_DoorsToResume</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_ResumeRoute\" name=\"Retomar viagem e acelerar no trânsito\">\n      <bpmn:incoming>Flow_DoorsToResume</bpmn:incoming>\n      <bpmn:outgoing>Flow_ResumeToSeatCheck</bpmn:outgoing>\n    </bpmn:userTask>\n\n    \n    <bpmn:exclusiveGateway id=\"Gateway_SeatAvailable\" name=\"Há assento livre no veículo?\">\n      <bpmn:incoming>Flow_ResumeToSeatCheck</bpmn:incoming>\n      <bpmn:outgoing>Flow_SeatFreeYes</bpmn:outgoing>\n      <bpmn:outgoing>Flow_SeatFreeNo</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_SitInSeat\" name=\"Acomodar-se no assento vago\">\n      <bpmn:incoming>Flow_SeatFreeYes</bpmn:incoming>\n      <bpmn:outgoing>Flow_SitToMerge</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_TravelStanding\" name=\"Permanecer em pé segurando firme no balaústre\">\n      <bpmn:incoming>Flow_SeatFreeNo</bpmn:incoming>\n      <bpmn:outgoing>Flow_StandToMerge</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_MergePosture\" name=\"Sincronização de trajeto\">\n      <bpmn:incoming>Flow_SitToMerge</bpmn:incoming>\n      <bpmn:incoming>Flow_StandToMerge</bpmn:incoming>\n      <bpmn:outgoing>Flow_MergeToPressButton</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n\n    \n    <bpmn:userTask id=\"Task_PressStopButton\" name=\"Pressionar botão de sinal de parada antes do ponto\">\n      <bpmn:incoming>Flow_MergeToPressButton</bpmn:incoming>\n      <bpmn:outgoing>Flow_ButtonToTrigger</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:serviceTask id=\"Task_TriggerStopIndicator\" name=\"Acionar campainha e acender luminoso Parada Solicitada\">\n      <bpmn:incoming>Flow_ButtonToTrigger</bpmn:incoming>\n      <bpmn:outgoing>Flow_TriggerToStop</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_StopAtDestination\" name=\"Parar no ponto de destino e acionar freio\">\n      <bpmn:incoming>Flow_TriggerToStop</bpmn:incoming>\n      <bpmn:outgoing>Flow_StopToOpenRear</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:serviceTask id=\"Task_OpenRearDoors\" name=\"Abrir portas traseiras de desembarque\">\n      <bpmn:incoming>Flow_StopToOpenRear</bpmn:incoming>\n      <bpmn:outgoing>Flow_OpenRearToDisembark</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_DisembarkBus\" name=\"Descer pela porta traseira com segurança\">\n      <bpmn:incoming>Flow_OpenRearToDisembark</bpmn:incoming>\n      <bpmn:outgoing>Flow_DisembarkToEnd</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_TripCompleted\" name=\"Viagem concluída no destino com sucesso\">\n      <bpmn:incoming>Flow_DisembarkToEnd</bpmn:incoming>\n    </bpmn:endEvent>\n\n    \n    <bpmn:sequenceFlow id=\"Flow_StartToSignal\" sourceRef=\"Start_PassengerAtStop\" targetRef=\"Task_SignalBus\" />\n    <bpmn:sequenceFlow id=\"Flow_SignalToCheck\" sourceRef=\"Task_SignalBus\" targetRef=\"Task_CheckCapacity\" />\n    <bpmn:sequenceFlow id=\"Flow_CheckToFullGateway\" sourceRef=\"Task_CheckCapacity\" targetRef=\"Gateway_IsBusFull\" />\n    \n    <bpmn:sequenceFlow id=\"Flow_BusFullYes\" name=\"Sim (Lotado)\" sourceRef=\"Gateway_IsBusFull\" targetRef=\"Task_BypassStop\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${isFull == true}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_BypassToEnd\" sourceRef=\"Task_BypassStop\" targetRef=\"End_MissedBusFull\" />\n    \n    <bpmn:sequenceFlow id=\"Flow_BusFullNo\" name=\"Não (Há vagas)\" sourceRef=\"Gateway_IsBusFull\" targetRef=\"Task_ParkAtStop\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${isFull == false}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_ParkToOpenDoors\" sourceRef=\"Task_ParkAtStop\" targetRef=\"Task_OpenFrontDoors\" />\n    <bpmn:sequenceFlow id=\"Flow_DoorsToBoard\" sourceRef=\"Task_OpenFrontDoors\" targetRef=\"Task_BoardBus\" />\n    <bpmn:sequenceFlow id=\"Flow_BoardToPayGateway\" sourceRef=\"Task_BoardBus\" targetRef=\"Gateway_PaymentMethod\" />\n\n    <bpmn:sequenceFlow id=\"Flow_PayByCard\" name=\"Cartão Eletrônico\" sourceRef=\"Gateway_PaymentMethod\" targetRef=\"Task_TapSmartCard\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${method == 'card'}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_CashEntryToPay\" sourceRef=\"Gateway_CashEntry\" targetRef=\"Task_PayWithCash\" />\n    <bpmn:sequenceFlow id=\"Flow_ReleaseToUnlock\" sourceRef=\"Gateway_TurnstileRelease\" targetRef=\"Task_UnlockTurnstile\" />\n    <bpmn:sequenceFlow id=\"Flow_PayByCash\" name=\"Dinheiro\" sourceRef=\"Gateway_PaymentMethod\" targetRef=\"Gateway_CashEntry\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${method == 'cash'}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n\n    <bpmn:sequenceFlow id=\"Flow_TapToValidate\" sourceRef=\"Task_TapSmartCard\" targetRef=\"Task_ValidateCardBalance\" />\n    <bpmn:sequenceFlow id=\"Flow_ValidateToBalanceGateway\" sourceRef=\"Task_ValidateCardBalance\" targetRef=\"Gateway_CardBalanceCheck\" />\n    \n    <bpmn:sequenceFlow id=\"Flow_BalanceSufficient\" name=\"Saldo suficiente\" sourceRef=\"Gateway_CardBalanceCheck\" targetRef=\"Task_DeductFare\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${cardBalance &gt;= fare}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_DeductToUnlock\" sourceRef=\"Task_DeductFare\" targetRef=\"Gateway_TurnstileRelease\" />\n\n    <bpmn:sequenceFlow id=\"Flow_BalanceInsufficient\" name=\"Saldo insuficiente\" sourceRef=\"Gateway_CardBalanceCheck\" targetRef=\"Task_AlertInsufficientBalance\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${cardBalance &lt; fare}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_AlertToFallback\" sourceRef=\"Task_AlertInsufficientBalance\" targetRef=\"Gateway_FallbackCash\" />\n\n    <bpmn:sequenceFlow id=\"Flow_HasFallbackCash\" name=\"Possui dinheiro\" sourceRef=\"Gateway_FallbackCash\" targetRef=\"Gateway_CashEntry\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${hasCash == true}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_NoFallbackCash\" name=\"Sem dinheiro\" sourceRef=\"Gateway_FallbackCash\" targetRef=\"End_LeftNoFunds\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${hasCash == false}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n\n    <bpmn:sequenceFlow id=\"Flow_PayToReceiveCash\" sourceRef=\"Task_PayWithCash\" targetRef=\"Task_ReceiveCash\" />\n    <bpmn:sequenceFlow id=\"Flow_ReceiveToChangeGateway\" sourceRef=\"Task_ReceiveCash\" targetRef=\"Gateway_HasChange\" />\n\n    <bpmn:sequenceFlow id=\"Flow_ChangeAvailable\" name=\"Troco OK ou valor exato\" sourceRef=\"Gateway_HasChange\" targetRef=\"Task_CalculateAndReturnChange\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${hasChange == true}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_ChangeToAuthorize\" sourceRef=\"Task_CalculateAndReturnChange\" targetRef=\"Task_AuthorizeTurnstileManual\" />\n    <bpmn:sequenceFlow id=\"Flow_AuthorizeToUnlock\" sourceRef=\"Task_AuthorizeTurnstileManual\" targetRef=\"Gateway_TurnstileRelease\" />\n\n    <bpmn:sequenceFlow id=\"Flow_ChangeUnavailable\" name=\"Sem troco disponível\" sourceRef=\"Gateway_HasChange\" targetRef=\"Task_UnableToGiveChange\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${hasChange == false}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_NoChangeToEnd\" sourceRef=\"Task_UnableToGiveChange\" targetRef=\"End_LeftNoFunds\" />\n\n    <bpmn:sequenceFlow id=\"Flow_UnlockToPass\" sourceRef=\"Task_UnlockTurnstile\" targetRef=\"Task_PassTurnstile\" />\n    <bpmn:sequenceFlow id=\"Flow_PassToCloseDoors\" sourceRef=\"Task_PassTurnstile\" targetRef=\"Task_CloseDoors\" />\n    <bpmn:sequenceFlow id=\"Flow_DoorsToResume\" sourceRef=\"Task_CloseDoors\" targetRef=\"Task_ResumeRoute\" />\n    <bpmn:sequenceFlow id=\"Flow_ResumeToSeatCheck\" sourceRef=\"Task_ResumeRoute\" targetRef=\"Gateway_SeatAvailable\" />\n\n    <bpmn:sequenceFlow id=\"Flow_SeatFreeYes\" name=\"Sim\" sourceRef=\"Gateway_SeatAvailable\" targetRef=\"Task_SitInSeat\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${hasFreeSeat == true}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_SitToMerge\" sourceRef=\"Task_SitInSeat\" targetRef=\"Gateway_MergePosture\" />\n\n    <bpmn:sequenceFlow id=\"Flow_SeatFreeNo\" name=\"Não\" sourceRef=\"Gateway_SeatAvailable\" targetRef=\"Task_TravelStanding\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${hasFreeSeat == false}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_StandToMerge\" sourceRef=\"Task_TravelStanding\" targetRef=\"Gateway_MergePosture\" />\n\n    <bpmn:sequenceFlow id=\"Flow_MergeToPressButton\" sourceRef=\"Gateway_MergePosture\" targetRef=\"Task_PressStopButton\" />\n    <bpmn:sequenceFlow id=\"Flow_ButtonToTrigger\" sourceRef=\"Task_PressStopButton\" targetRef=\"Task_TriggerStopIndicator\" />\n    <bpmn:sequenceFlow id=\"Flow_TriggerToStop\" sourceRef=\"Task_TriggerStopIndicator\" targetRef=\"Task_StopAtDestination\" />\n    <bpmn:sequenceFlow id=\"Flow_StopToOpenRear\" sourceRef=\"Task_StopAtDestination\" targetRef=\"Task_OpenRearDoors\" />\n    <bpmn:sequenceFlow id=\"Flow_OpenRearToDisembark\" sourceRef=\"Task_OpenRearDoors\" targetRef=\"Task_DisembarkBus\" />\n    <bpmn:sequenceFlow id=\"Flow_DisembarkToEnd\" sourceRef=\"Task_DisembarkBus\" targetRef=\"End_TripCompleted\" />\n\n  </bpmn:process>\n<bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_BusBoarding\"><bpmndi:BPMNPlane id=\"BPMNPlane_Process_BusBoarding\" bpmnElement=\"Process_BusBoarding\"><bpmndi:BPMNShape id=\"Lane_Passenger_di\" bpmnElement=\"Lane_Passenger\" isHorizontal=\"true\"><omgdc:Bounds x=\"0\" y=\"60\" width=\"4850\" height=\"360\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Lane_Driver_di\" bpmnElement=\"Lane_Driver\" isHorizontal=\"true\"><omgdc:Bounds x=\"0\" y=\"420\" width=\"4850\" height=\"360\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Lane_FareCollector_di\" bpmnElement=\"Lane_FareCollector\" isHorizontal=\"true\"><omgdc:Bounds x=\"0\" y=\"780\" width=\"4850\" height=\"360\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Lane_BusSystem_di\" bpmnElement=\"Lane_BusSystem\" isHorizontal=\"true\"><omgdc:Bounds x=\"0\" y=\"1140\" width=\"4850\" height=\"360\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Start_PassengerAtStop_di\" bpmnElement=\"Start_PassengerAtStop\"><omgdc:Bounds x=\"160\" y=\"222\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_SignalBus_di\" bpmnElement=\"Task_SignalBus\"><omgdc:Bounds x=\"310\" y=\"200\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_CheckCapacity_di\" bpmnElement=\"Task_CheckCapacity\"><omgdc:Bounds x=\"460\" y=\"560\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_IsBusFull_di\" bpmnElement=\"Gateway_IsBusFull\"><omgdc:Bounds x=\"610\" y=\"575\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_ParkAtStop_di\" bpmnElement=\"Task_ParkAtStop\"><omgdc:Bounds x=\"760\" y=\"620\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_BypassStop_di\" bpmnElement=\"Task_BypassStop\"><omgdc:Bounds x=\"760\" y=\"500\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_OpenFrontDoors_di\" bpmnElement=\"Task_OpenFrontDoors\"><omgdc:Bounds x=\"910\" y=\"1340\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_MissedBusFull_di\" bpmnElement=\"End_MissedBusFull\"><omgdc:Bounds x=\"910\" y=\"162\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_BoardBus_di\" bpmnElement=\"Task_BoardBus\"><omgdc:Bounds x=\"1060\" y=\"260\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_PaymentMethod_di\" bpmnElement=\"Gateway_PaymentMethod\"><omgdc:Bounds x=\"1210\" y=\"275\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_TapSmartCard_di\" bpmnElement=\"Task_TapSmartCard\"><omgdc:Bounds x=\"1360\" y=\"200\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_ValidateCardBalance_di\" bpmnElement=\"Task_ValidateCardBalance\"><omgdc:Bounds x=\"1510\" y=\"1280\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_CardBalanceCheck_di\" bpmnElement=\"Gateway_CardBalanceCheck\"><omgdc:Bounds x=\"1660\" y=\"1295\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_DeductFare_di\" bpmnElement=\"Task_DeductFare\"><omgdc:Bounds x=\"1810\" y=\"1220\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_AlertInsufficientBalance_di\" bpmnElement=\"Task_AlertInsufficientBalance\"><omgdc:Bounds x=\"1810\" y=\"1340\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_FallbackCash_di\" bpmnElement=\"Gateway_FallbackCash\"><omgdc:Bounds x=\"1960\" y=\"275\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_CashEntry_di\" bpmnElement=\"Gateway_CashEntry\"><omgdc:Bounds x=\"2030\" y=\"335\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_PayWithCash_di\" bpmnElement=\"Task_PayWithCash\"><omgdc:Bounds x=\"2110\" y=\"320\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_ReceiveCash_di\" bpmnElement=\"Task_ReceiveCash\"><omgdc:Bounds x=\"2260\" y=\"1040\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_HasChange_di\" bpmnElement=\"Gateway_HasChange\"><omgdc:Bounds x=\"2410\" y=\"1055\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_UnableToGiveChange_di\" bpmnElement=\"Task_UnableToGiveChange\"><omgdc:Bounds x=\"2560\" y=\"1080\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_CalculateAndReturnChange_di\" bpmnElement=\"Task_CalculateAndReturnChange\"><omgdc:Bounds x=\"2560\" y=\"980\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_LeftNoFunds_di\" bpmnElement=\"End_LeftNoFunds\"><omgdc:Bounds x=\"2710\" y=\"342\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_AuthorizeTurnstileManual_di\" bpmnElement=\"Task_AuthorizeTurnstileManual\"><omgdc:Bounds x=\"2710\" y=\"980\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_TurnstileRelease_di\" bpmnElement=\"Gateway_TurnstileRelease\"><omgdc:Bounds x=\"2780\" y=\"1235\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_UnlockTurnstile_di\" bpmnElement=\"Task_UnlockTurnstile\"><omgdc:Bounds x=\"2860\" y=\"1220\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_PassTurnstile_di\" bpmnElement=\"Task_PassTurnstile\"><omgdc:Bounds x=\"3010\" y=\"140\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_CloseDoors_di\" bpmnElement=\"Task_CloseDoors\"><omgdc:Bounds x=\"3160\" y=\"1220\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_ResumeRoute_di\" bpmnElement=\"Task_ResumeRoute\"><omgdc:Bounds x=\"3310\" y=\"500\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_SeatAvailable_di\" bpmnElement=\"Gateway_SeatAvailable\"><omgdc:Bounds x=\"3460\" y=\"155\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_TravelStanding_di\" bpmnElement=\"Task_TravelStanding\"><omgdc:Bounds x=\"3610\" y=\"200\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_SitInSeat_di\" bpmnElement=\"Task_SitInSeat\"><omgdc:Bounds x=\"3610\" y=\"80\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_MergePosture_di\" bpmnElement=\"Gateway_MergePosture\"><omgdc:Bounds x=\"3760\" y=\"215\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_PressStopButton_di\" bpmnElement=\"Task_PressStopButton\"><omgdc:Bounds x=\"3910\" y=\"200\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_TriggerStopIndicator_di\" bpmnElement=\"Task_TriggerStopIndicator\"><omgdc:Bounds x=\"4060\" y=\"1280\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_StopAtDestination_di\" bpmnElement=\"Task_StopAtDestination\"><omgdc:Bounds x=\"4210\" y=\"560\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_OpenRearDoors_di\" bpmnElement=\"Task_OpenRearDoors\"><omgdc:Bounds x=\"4360\" y=\"1280\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_DisembarkBus_di\" bpmnElement=\"Task_DisembarkBus\"><omgdc:Bounds x=\"4510\" y=\"200\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_TripCompleted_di\" bpmnElement=\"End_TripCompleted\"><omgdc:Bounds x=\"4660\" y=\"222\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id=\"Flow_StartToSignal_di\" bpmnElement=\"Flow_StartToSignal\"><omgdi:waypoint x=\"196\" y=\"240\" /><omgdi:waypoint x=\"310\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_SignalToCheck_di\" bpmnElement=\"Flow_SignalToCheck\"><omgdi:waypoint x=\"410\" y=\"240\" /><omgdi:waypoint x=\"435\" y=\"240\" /><omgdi:waypoint x=\"435\" y=\"600\" /><omgdi:waypoint x=\"460\" y=\"600\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_CheckToFullGateway_di\" bpmnElement=\"Flow_CheckToFullGateway\"><omgdi:waypoint x=\"560\" y=\"600\" /><omgdi:waypoint x=\"610\" y=\"600\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_BusFullYes_di\" bpmnElement=\"Flow_BusFullYes\"><omgdi:waypoint x=\"660\" y=\"600\" /><omgdi:waypoint x=\"710\" y=\"600\" /><omgdi:waypoint x=\"710\" y=\"540\" /><omgdi:waypoint x=\"760\" y=\"540\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_BypassToEnd_di\" bpmnElement=\"Flow_BypassToEnd\"><omgdi:waypoint x=\"860\" y=\"540\" /><omgdi:waypoint x=\"885\" y=\"540\" /><omgdi:waypoint x=\"885\" y=\"180\" /><omgdi:waypoint x=\"910\" y=\"180\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_BusFullNo_di\" bpmnElement=\"Flow_BusFullNo\"><omgdi:waypoint x=\"660\" y=\"600\" /><omgdi:waypoint x=\"710\" y=\"600\" /><omgdi:waypoint x=\"710\" y=\"660\" /><omgdi:waypoint x=\"760\" y=\"660\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ParkToOpenDoors_di\" bpmnElement=\"Flow_ParkToOpenDoors\"><omgdi:waypoint x=\"860\" y=\"660\" /><omgdi:waypoint x=\"885\" y=\"660\" /><omgdi:waypoint x=\"885\" y=\"1380\" /><omgdi:waypoint x=\"910\" y=\"1380\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_DoorsToBoard_di\" bpmnElement=\"Flow_DoorsToBoard\"><omgdi:waypoint x=\"1010\" y=\"1380\" /><omgdi:waypoint x=\"1035\" y=\"1380\" /><omgdi:waypoint x=\"1035\" y=\"300\" /><omgdi:waypoint x=\"1060\" y=\"300\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_BoardToPayGateway_di\" bpmnElement=\"Flow_BoardToPayGateway\"><omgdi:waypoint x=\"1160\" y=\"300\" /><omgdi:waypoint x=\"1210\" y=\"300\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_PayByCard_di\" bpmnElement=\"Flow_PayByCard\"><omgdi:waypoint x=\"1260\" y=\"300\" /><omgdi:waypoint x=\"1310\" y=\"300\" /><omgdi:waypoint x=\"1310\" y=\"240\" /><omgdi:waypoint x=\"1360\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_PayByCash_di\" bpmnElement=\"Flow_PayByCash\"><omgdi:waypoint x=\"1260\" y=\"300\" /><omgdi:waypoint x=\"1645\" y=\"300\" /><omgdi:waypoint x=\"1645\" y=\"360\" /><omgdi:waypoint x=\"2030\" y=\"360\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_CashEntryToPay_di\" bpmnElement=\"Flow_CashEntryToPay\"><omgdi:waypoint x=\"2080\" y=\"360\" /><omgdi:waypoint x=\"2110\" y=\"360\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ReleaseToUnlock_di\" bpmnElement=\"Flow_ReleaseToUnlock\"><omgdi:waypoint x=\"2830\" y=\"1260\" /><omgdi:waypoint x=\"2860\" y=\"1260\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_TapToValidate_di\" bpmnElement=\"Flow_TapToValidate\"><omgdi:waypoint x=\"1460\" y=\"240\" /><omgdi:waypoint x=\"1485\" y=\"240\" /><omgdi:waypoint x=\"1485\" y=\"1320\" /><omgdi:waypoint x=\"1510\" y=\"1320\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ValidateToBalanceGateway_di\" bpmnElement=\"Flow_ValidateToBalanceGateway\"><omgdi:waypoint x=\"1610\" y=\"1320\" /><omgdi:waypoint x=\"1660\" y=\"1320\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_BalanceSufficient_di\" bpmnElement=\"Flow_BalanceSufficient\"><omgdi:waypoint x=\"1710\" y=\"1320\" /><omgdi:waypoint x=\"1760\" y=\"1320\" /><omgdi:waypoint x=\"1760\" y=\"1260\" /><omgdi:waypoint x=\"1810\" y=\"1260\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_DeductToUnlock_di\" bpmnElement=\"Flow_DeductToUnlock\"><omgdi:waypoint x=\"1910\" y=\"1260\" /><omgdi:waypoint x=\"2780\" y=\"1260\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_BalanceInsufficient_di\" bpmnElement=\"Flow_BalanceInsufficient\"><omgdi:waypoint x=\"1710\" y=\"1320\" /><omgdi:waypoint x=\"1760\" y=\"1320\" /><omgdi:waypoint x=\"1760\" y=\"1380\" /><omgdi:waypoint x=\"1810\" y=\"1380\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_AlertToFallback_di\" bpmnElement=\"Flow_AlertToFallback\"><omgdi:waypoint x=\"1910\" y=\"1380\" /><omgdi:waypoint x=\"1935\" y=\"1380\" /><omgdi:waypoint x=\"1935\" y=\"300\" /><omgdi:waypoint x=\"1960\" y=\"300\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_HasFallbackCash_di\" bpmnElement=\"Flow_HasFallbackCash\"><omgdi:waypoint x=\"1985\" y=\"325\" /><omgdi:waypoint x=\"1985\" y=\"360\" /><omgdi:waypoint x=\"2030\" y=\"360\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_NoFallbackCash_di\" bpmnElement=\"Flow_NoFallbackCash\"><omgdi:waypoint x=\"2010\" y=\"300\" /><omgdi:waypoint x=\"2360\" y=\"300\" /><omgdi:waypoint x=\"2360\" y=\"360\" /><omgdi:waypoint x=\"2710\" y=\"360\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_PayToReceiveCash_di\" bpmnElement=\"Flow_PayToReceiveCash\"><omgdi:waypoint x=\"2210\" y=\"360\" /><omgdi:waypoint x=\"2235\" y=\"360\" /><omgdi:waypoint x=\"2235\" y=\"1080\" /><omgdi:waypoint x=\"2260\" y=\"1080\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ReceiveToChangeGateway_di\" bpmnElement=\"Flow_ReceiveToChangeGateway\"><omgdi:waypoint x=\"2360\" y=\"1080\" /><omgdi:waypoint x=\"2410\" y=\"1080\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ChangeAvailable_di\" bpmnElement=\"Flow_ChangeAvailable\"><omgdi:waypoint x=\"2460\" y=\"1080\" /><omgdi:waypoint x=\"2510\" y=\"1080\" /><omgdi:waypoint x=\"2510\" y=\"1020\" /><omgdi:waypoint x=\"2560\" y=\"1020\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ChangeToAuthorize_di\" bpmnElement=\"Flow_ChangeToAuthorize\"><omgdi:waypoint x=\"2660\" y=\"1020\" /><omgdi:waypoint x=\"2710\" y=\"1020\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_AuthorizeToUnlock_di\" bpmnElement=\"Flow_AuthorizeToUnlock\"><omgdi:waypoint x=\"2760\" y=\"1060\" /><omgdi:waypoint x=\"2760\" y=\"1180\" /><omgdi:waypoint x=\"2805\" y=\"1180\" /><omgdi:waypoint x=\"2805\" y=\"1235\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ChangeUnavailable_di\" bpmnElement=\"Flow_ChangeUnavailable\"><omgdi:waypoint x=\"2460\" y=\"1080\" /><omgdi:waypoint x=\"2510\" y=\"1080\" /><omgdi:waypoint x=\"2510\" y=\"1120\" /><omgdi:waypoint x=\"2560\" y=\"1120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_NoChangeToEnd_di\" bpmnElement=\"Flow_NoChangeToEnd\"><omgdi:waypoint x=\"2660\" y=\"1120\" /><omgdi:waypoint x=\"2685\" y=\"1120\" /><omgdi:waypoint x=\"2685\" y=\"360\" /><omgdi:waypoint x=\"2710\" y=\"360\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_UnlockToPass_di\" bpmnElement=\"Flow_UnlockToPass\"><omgdi:waypoint x=\"2960\" y=\"1260\" /><omgdi:waypoint x=\"2985\" y=\"1260\" /><omgdi:waypoint x=\"2985\" y=\"180\" /><omgdi:waypoint x=\"3010\" y=\"180\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_PassToCloseDoors_di\" bpmnElement=\"Flow_PassToCloseDoors\"><omgdi:waypoint x=\"3110\" y=\"180\" /><omgdi:waypoint x=\"3135\" y=\"180\" /><omgdi:waypoint x=\"3135\" y=\"1260\" /><omgdi:waypoint x=\"3160\" y=\"1260\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_DoorsToResume_di\" bpmnElement=\"Flow_DoorsToResume\"><omgdi:waypoint x=\"3260\" y=\"1260\" /><omgdi:waypoint x=\"3285\" y=\"1260\" /><omgdi:waypoint x=\"3285\" y=\"540\" /><omgdi:waypoint x=\"3310\" y=\"540\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ResumeToSeatCheck_di\" bpmnElement=\"Flow_ResumeToSeatCheck\"><omgdi:waypoint x=\"3410\" y=\"540\" /><omgdi:waypoint x=\"3435\" y=\"540\" /><omgdi:waypoint x=\"3435\" y=\"180\" /><omgdi:waypoint x=\"3460\" y=\"180\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_SeatFreeYes_di\" bpmnElement=\"Flow_SeatFreeYes\"><omgdi:waypoint x=\"3510\" y=\"180\" /><omgdi:waypoint x=\"3560\" y=\"180\" /><omgdi:waypoint x=\"3560\" y=\"120\" /><omgdi:waypoint x=\"3610\" y=\"120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_SitToMerge_di\" bpmnElement=\"Flow_SitToMerge\"><omgdi:waypoint x=\"3710\" y=\"120\" /><omgdi:waypoint x=\"3735\" y=\"120\" /><omgdi:waypoint x=\"3735\" y=\"240\" /><omgdi:waypoint x=\"3760\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_SeatFreeNo_di\" bpmnElement=\"Flow_SeatFreeNo\"><omgdi:waypoint x=\"3510\" y=\"180\" /><omgdi:waypoint x=\"3560\" y=\"180\" /><omgdi:waypoint x=\"3560\" y=\"240\" /><omgdi:waypoint x=\"3610\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_StandToMerge_di\" bpmnElement=\"Flow_StandToMerge\"><omgdi:waypoint x=\"3710\" y=\"240\" /><omgdi:waypoint x=\"3760\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_MergeToPressButton_di\" bpmnElement=\"Flow_MergeToPressButton\"><omgdi:waypoint x=\"3810\" y=\"240\" /><omgdi:waypoint x=\"3910\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ButtonToTrigger_di\" bpmnElement=\"Flow_ButtonToTrigger\"><omgdi:waypoint x=\"4010\" y=\"240\" /><omgdi:waypoint x=\"4035\" y=\"240\" /><omgdi:waypoint x=\"4035\" y=\"1320\" /><omgdi:waypoint x=\"4060\" y=\"1320\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_TriggerToStop_di\" bpmnElement=\"Flow_TriggerToStop\"><omgdi:waypoint x=\"4160\" y=\"1320\" /><omgdi:waypoint x=\"4185\" y=\"1320\" /><omgdi:waypoint x=\"4185\" y=\"600\" /><omgdi:waypoint x=\"4210\" y=\"600\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_StopToOpenRear_di\" bpmnElement=\"Flow_StopToOpenRear\"><omgdi:waypoint x=\"4310\" y=\"600\" /><omgdi:waypoint x=\"4335\" y=\"600\" /><omgdi:waypoint x=\"4335\" y=\"1320\" /><omgdi:waypoint x=\"4360\" y=\"1320\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_OpenRearToDisembark_di\" bpmnElement=\"Flow_OpenRearToDisembark\"><omgdi:waypoint x=\"4460\" y=\"1320\" /><omgdi:waypoint x=\"4485\" y=\"1320\" /><omgdi:waypoint x=\"4485\" y=\"240\" /><omgdi:waypoint x=\"4510\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_DisembarkToEnd_di\" bpmnElement=\"Flow_DisembarkToEnd\"><omgdi:waypoint x=\"4610\" y=\"240\" /><omgdi:waypoint x=\"4660\" y=\"240\" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>", "04-incident-management.bpmn": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" id=\"Definitions_IncidentManagement\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_IncidentManagement\" name=\"Incident Management\" isExecutable=\"false\">\n    <bpmn:laneSet id=\"LaneSet_SupportTiers\">\n      <bpmn:lane id=\"Lane_Tier1Support\" name=\"Tier 1 Support\">\n        <bpmn:flowNodeRef>Start_IncidentLogged</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_TriageIncident</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Gateway_NeedsBugFix</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_ProvideDirectSolution</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>End_DirectlyResolved</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_VerifyWithCustomer</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>End_ResolvedWithPatch</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_Tier2Engineering\" name=\"Tier 2 Engineering\">\n        <bpmn:flowNodeRef>Task_InvestigateBug</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_DeployHotfix</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n\n    <bpmn:startEvent id=\"Start_IncidentLogged\" name=\"Incident logged\">\n      <bpmn:outgoing>Flow_StartToTriage</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_TriageIncident\" name=\"Triage incident\">\n      <bpmn:incoming>Flow_StartToTriage</bpmn:incoming>\n      <bpmn:outgoing>Flow_TriageToGateway</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_NeedsBugFix\" name=\"Code defect?\">\n      <bpmn:incoming>Flow_TriageToGateway</bpmn:incoming>\n      <bpmn:outgoing>Flow_Simple</bpmn:outgoing>\n      <bpmn:outgoing>Flow_ToTier2</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_ProvideDirectSolution\" name=\"Provide standard resolution\">\n      <bpmn:incoming>Flow_Simple</bpmn:incoming>\n      <bpmn:outgoing>Flow_DirectToEnd</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_DirectlyResolved\" name=\"Resolved directly\">\n      <bpmn:incoming>Flow_DirectToEnd</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:userTask id=\"Task_InvestigateBug\" name=\"Investigate bug and create fix\">\n      <bpmn:incoming>Flow_ToTier2</bpmn:incoming>\n      <bpmn:outgoing>Flow_FixToDeploy</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:serviceTask id=\"Task_DeployHotfix\" name=\"Deploy hotfix\">\n      <bpmn:incoming>Flow_FixToDeploy</bpmn:incoming>\n      <bpmn:outgoing>Flow_BackToTier1</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_VerifyWithCustomer\" name=\"Verify resolution with customer\">\n      <bpmn:incoming>Flow_BackToTier1</bpmn:incoming>\n      <bpmn:outgoing>Flow_VerifyToEnd</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_ResolvedWithPatch\" name=\"Resolved via hotfix\">\n      <bpmn:incoming>Flow_VerifyToEnd</bpmn:incoming>\n    </bpmn:endEvent>\n\n    <bpmn:sequenceFlow id=\"Flow_StartToTriage\" sourceRef=\"Start_IncidentLogged\" targetRef=\"Task_TriageIncident\" />\n    <bpmn:sequenceFlow id=\"Flow_TriageToGateway\" sourceRef=\"Task_TriageIncident\" targetRef=\"Gateway_NeedsBugFix\" />\n    <bpmn:sequenceFlow id=\"Flow_Simple\" name=\"No\" sourceRef=\"Gateway_NeedsBugFix\" targetRef=\"Task_ProvideDirectSolution\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">isDefect == false</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_DirectToEnd\" sourceRef=\"Task_ProvideDirectSolution\" targetRef=\"End_DirectlyResolved\" />\n    <bpmn:sequenceFlow id=\"Flow_ToTier2\" name=\"Yes\" sourceRef=\"Gateway_NeedsBugFix\" targetRef=\"Task_InvestigateBug\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">isDefect == true</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_FixToDeploy\" sourceRef=\"Task_InvestigateBug\" targetRef=\"Task_DeployHotfix\" />\n    <bpmn:sequenceFlow id=\"Flow_BackToTier1\" sourceRef=\"Task_DeployHotfix\" targetRef=\"Task_VerifyWithCustomer\" />\n    <bpmn:sequenceFlow id=\"Flow_VerifyToEnd\" sourceRef=\"Task_VerifyWithCustomer\" targetRef=\"End_ResolvedWithPatch\" />\n  </bpmn:process>\n<bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_IncidentManagement\"><bpmndi:BPMNPlane id=\"BPMNPlane_Process_IncidentManagement\" bpmnElement=\"Process_IncidentManagement\"><bpmndi:BPMNShape id=\"Lane_Tier1Support_di\" bpmnElement=\"Lane_Tier1Support\" isHorizontal=\"true\"><omgdc:Bounds x=\"0\" y=\"60\" width=\"1250\" height=\"360\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Lane_Tier2Engineering_di\" bpmnElement=\"Lane_Tier2Engineering\" isHorizontal=\"true\"><omgdc:Bounds x=\"0\" y=\"420\" width=\"1250\" height=\"360\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Start_IncidentLogged_di\" bpmnElement=\"Start_IncidentLogged\"><omgdc:Bounds x=\"160\" y=\"222\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_TriageIncident_di\" bpmnElement=\"Task_TriageIncident\"><omgdc:Bounds x=\"310\" y=\"200\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_NeedsBugFix_di\" bpmnElement=\"Gateway_NeedsBugFix\"><omgdc:Bounds x=\"460\" y=\"215\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_ProvideDirectSolution_di\" bpmnElement=\"Task_ProvideDirectSolution\"><omgdc:Bounds x=\"610\" y=\"140\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_InvestigateBug_di\" bpmnElement=\"Task_InvestigateBug\"><omgdc:Bounds x=\"610\" y=\"620\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_DirectlyResolved_di\" bpmnElement=\"End_DirectlyResolved\"><omgdc:Bounds x=\"760\" y=\"162\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_DeployHotfix_di\" bpmnElement=\"Task_DeployHotfix\"><omgdc:Bounds x=\"760\" y=\"620\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_VerifyWithCustomer_di\" bpmnElement=\"Task_VerifyWithCustomer\"><omgdc:Bounds x=\"910\" y=\"260\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_ResolvedWithPatch_di\" bpmnElement=\"End_ResolvedWithPatch\"><omgdc:Bounds x=\"1060\" y=\"282\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id=\"Flow_StartToTriage_di\" bpmnElement=\"Flow_StartToTriage\"><omgdi:waypoint x=\"196\" y=\"240\" /><omgdi:waypoint x=\"310\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_TriageToGateway_di\" bpmnElement=\"Flow_TriageToGateway\"><omgdi:waypoint x=\"410\" y=\"240\" /><omgdi:waypoint x=\"460\" y=\"240\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_Simple_di\" bpmnElement=\"Flow_Simple\"><omgdi:waypoint x=\"510\" y=\"240\" /><omgdi:waypoint x=\"560\" y=\"240\" /><omgdi:waypoint x=\"560\" y=\"180\" /><omgdi:waypoint x=\"610\" y=\"180\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_DirectToEnd_di\" bpmnElement=\"Flow_DirectToEnd\"><omgdi:waypoint x=\"710\" y=\"180\" /><omgdi:waypoint x=\"760\" y=\"180\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_ToTier2_di\" bpmnElement=\"Flow_ToTier2\"><omgdi:waypoint x=\"510\" y=\"240\" /><omgdi:waypoint x=\"560\" y=\"240\" /><omgdi:waypoint x=\"560\" y=\"660\" /><omgdi:waypoint x=\"610\" y=\"660\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_FixToDeploy_di\" bpmnElement=\"Flow_FixToDeploy\"><omgdi:waypoint x=\"710\" y=\"660\" /><omgdi:waypoint x=\"760\" y=\"660\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_BackToTier1_di\" bpmnElement=\"Flow_BackToTier1\"><omgdi:waypoint x=\"860\" y=\"660\" /><omgdi:waypoint x=\"885\" y=\"660\" /><omgdi:waypoint x=\"885\" y=\"300\" /><omgdi:waypoint x=\"910\" y=\"300\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_VerifyToEnd_di\" bpmnElement=\"Flow_VerifyToEnd\"><omgdi:waypoint x=\"1010\" y=\"300\" /><omgdi:waypoint x=\"1060\" y=\"300\" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>", "03-order-fulfillment.bpmn": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"Definitions_OrderFulfillment\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_OrderFulfillment\" name=\"Order Fulfillment\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"Start_OrderConfirmed\" name=\"Order confirmed\">\n      <bpmn:outgoing>Flow_StartToSplit</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:parallelGateway id=\"Gateway_SplitFulfillment\" name=\"Split tasks\">\n      <bpmn:incoming>Flow_StartToSplit</bpmn:incoming>\n      <bpmn:outgoing>Flow_SplitToPayment</bpmn:outgoing>\n      <bpmn:outgoing>Flow_SplitToWarehouse</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:serviceTask id=\"Task_ProcessPayment\" name=\"Charge payment\">\n      <bpmn:incoming>Flow_SplitToPayment</bpmn:incoming>\n      <bpmn:outgoing>Flow_PaymentToJoin</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_PickWarehouseStock\" name=\"Pick items from warehouse\">\n      <bpmn:incoming>Flow_SplitToWarehouse</bpmn:incoming>\n      <bpmn:outgoing>Flow_WarehouseToJoin</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:parallelGateway id=\"Gateway_JoinFulfillment\" name=\"Synchronize fulfillment\">\n      <bpmn:incoming>Flow_PaymentToJoin</bpmn:incoming>\n      <bpmn:incoming>Flow_WarehouseToJoin</bpmn:incoming>\n      <bpmn:outgoing>Flow_JoinToInvoice</bpmn:outgoing>\n    </bpmn:parallelGateway>\n    <bpmn:serviceTask id=\"Task_GenerateInvoiceAndShip\" name=\"Generate invoice and dispatch\">\n      <bpmn:incoming>Flow_JoinToInvoice</bpmn:incoming>\n      <bpmn:outgoing>Flow_InvoiceToEnd</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:endEvent id=\"End_OrderDispatched\" name=\"Order dispatched\">\n      <bpmn:incoming>Flow_InvoiceToEnd</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_StartToSplit\" sourceRef=\"Start_OrderConfirmed\" targetRef=\"Gateway_SplitFulfillment\" />\n    <bpmn:sequenceFlow id=\"Flow_SplitToPayment\" sourceRef=\"Gateway_SplitFulfillment\" targetRef=\"Task_ProcessPayment\" />\n    <bpmn:sequenceFlow id=\"Flow_SplitToWarehouse\" sourceRef=\"Gateway_SplitFulfillment\" targetRef=\"Task_PickWarehouseStock\" />\n    <bpmn:sequenceFlow id=\"Flow_PaymentToJoin\" sourceRef=\"Task_ProcessPayment\" targetRef=\"Gateway_JoinFulfillment\" />\n    <bpmn:sequenceFlow id=\"Flow_WarehouseToJoin\" sourceRef=\"Task_PickWarehouseStock\" targetRef=\"Gateway_JoinFulfillment\" />\n    <bpmn:sequenceFlow id=\"Flow_JoinToInvoice\" sourceRef=\"Gateway_JoinFulfillment\" targetRef=\"Task_GenerateInvoiceAndShip\" />\n    <bpmn:sequenceFlow id=\"Flow_InvoiceToEnd\" sourceRef=\"Task_GenerateInvoiceAndShip\" targetRef=\"End_OrderDispatched\" />\n  </bpmn:process>\n<bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_OrderFulfillment\"><bpmndi:BPMNPlane id=\"BPMNPlane_Process_OrderFulfillment\" bpmnElement=\"Process_OrderFulfillment\"><bpmndi:BPMNShape id=\"Start_OrderConfirmed_di\" bpmnElement=\"Start_OrderConfirmed\"><omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_SplitFulfillment_di\" bpmnElement=\"Gateway_SplitFulfillment\"><omgdc:Bounds x=\"310\" y=\"95\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_ProcessPayment_di\" bpmnElement=\"Task_ProcessPayment\"><omgdc:Bounds x=\"460\" y=\"20\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_PickWarehouseStock_di\" bpmnElement=\"Task_PickWarehouseStock\"><omgdc:Bounds x=\"460\" y=\"140\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_JoinFulfillment_di\" bpmnElement=\"Gateway_JoinFulfillment\"><omgdc:Bounds x=\"610\" y=\"35\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_GenerateInvoiceAndShip_di\" bpmnElement=\"Task_GenerateInvoiceAndShip\"><omgdc:Bounds x=\"760\" y=\"20\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_OrderDispatched_di\" bpmnElement=\"End_OrderDispatched\"><omgdc:Bounds x=\"910\" y=\"42\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id=\"Flow_StartToSplit_di\" bpmnElement=\"Flow_StartToSplit\"><omgdi:waypoint x=\"196\" y=\"120\" /><omgdi:waypoint x=\"310\" y=\"120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_SplitToPayment_di\" bpmnElement=\"Flow_SplitToPayment\"><omgdi:waypoint x=\"360\" y=\"120\" /><omgdi:waypoint x=\"410\" y=\"120\" /><omgdi:waypoint x=\"410\" y=\"60\" /><omgdi:waypoint x=\"460\" y=\"60\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_SplitToWarehouse_di\" bpmnElement=\"Flow_SplitToWarehouse\"><omgdi:waypoint x=\"360\" y=\"120\" /><omgdi:waypoint x=\"410\" y=\"120\" /><omgdi:waypoint x=\"410\" y=\"180\" /><omgdi:waypoint x=\"460\" y=\"180\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_PaymentToJoin_di\" bpmnElement=\"Flow_PaymentToJoin\"><omgdi:waypoint x=\"560\" y=\"60\" /><omgdi:waypoint x=\"610\" y=\"60\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_WarehouseToJoin_di\" bpmnElement=\"Flow_WarehouseToJoin\"><omgdi:waypoint x=\"560\" y=\"180\" /><omgdi:waypoint x=\"585\" y=\"180\" /><omgdi:waypoint x=\"585\" y=\"60\" /><omgdi:waypoint x=\"610\" y=\"60\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_JoinToInvoice_di\" bpmnElement=\"Flow_JoinToInvoice\"><omgdi:waypoint x=\"660\" y=\"60\" /><omgdi:waypoint x=\"760\" y=\"60\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_InvoiceToEnd_di\" bpmnElement=\"Flow_InvoiceToEnd\"><omgdi:waypoint x=\"860\" y=\"60\" /><omgdi:waypoint x=\"910\" y=\"60\" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>", "02-credit-card-approval.bpmn": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" id=\"Definitions_CreditCardApproval\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_CreditCardApproval\" name=\"Credit Card Approval\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"Start_ApplicationReceived\" name=\"Application received\">\n      <bpmn:outgoing>Flow_StartToCheck</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:serviceTask id=\"Task_CheckCreditScore\" name=\"Check credit score in bureau\">\n      <bpmn:incoming>Flow_StartToCheck</bpmn:incoming>\n      <bpmn:outgoing>Flow_CheckToGateway</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:exclusiveGateway id=\"Gateway_ScoreEvaluation\" name=\"Score &gt;= 700?\">\n      <bpmn:incoming>Flow_CheckToGateway</bpmn:incoming>\n      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>\n      <bpmn:outgoing>Flow_Rejected</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_IssueCard\" name=\"Issue credit card\">\n      <bpmn:incoming>Flow_Approved</bpmn:incoming>\n      <bpmn:outgoing>Flow_CardToDone</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_CardIssued\" name=\"Card issued and approved\">\n      <bpmn:incoming>Flow_CardToDone</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:serviceTask id=\"Task_SendRejectionNotice\" name=\"Send rejection notification\">\n      <bpmn:incoming>Flow_Rejected</bpmn:incoming>\n      <bpmn:outgoing>Flow_NoticeToRejected</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:endEvent id=\"End_ApplicationRejected\" name=\"Application rejected\">\n      <bpmn:incoming>Flow_NoticeToRejected</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_StartToCheck\" sourceRef=\"Start_ApplicationReceived\" targetRef=\"Task_CheckCreditScore\" />\n    <bpmn:sequenceFlow id=\"Flow_CheckToGateway\" sourceRef=\"Task_CheckCreditScore\" targetRef=\"Gateway_ScoreEvaluation\" />\n    <bpmn:sequenceFlow id=\"Flow_Approved\" name=\"Yes (score &gt;= 700)\" sourceRef=\"Gateway_ScoreEvaluation\" targetRef=\"Task_IssueCard\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${score &gt;= 700}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_Rejected\" name=\"No (score &lt; 700)\" sourceRef=\"Gateway_ScoreEvaluation\" targetRef=\"Task_SendRejectionNotice\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">${score &lt; 700}</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_CardToDone\" sourceRef=\"Task_IssueCard\" targetRef=\"End_CardIssued\" />\n    <bpmn:sequenceFlow id=\"Flow_NoticeToRejected\" sourceRef=\"Task_SendRejectionNotice\" targetRef=\"End_ApplicationRejected\" />\n  </bpmn:process>\n<bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_CreditCardApproval\"><bpmndi:BPMNPlane id=\"BPMNPlane_Process_CreditCardApproval\" bpmnElement=\"Process_CreditCardApproval\"><bpmndi:BPMNShape id=\"Start_ApplicationReceived_di\" bpmnElement=\"Start_ApplicationReceived\"><omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_CheckCreditScore_di\" bpmnElement=\"Task_CheckCreditScore\"><omgdc:Bounds x=\"310\" y=\"80\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Gateway_ScoreEvaluation_di\" bpmnElement=\"Gateway_ScoreEvaluation\"><omgdc:Bounds x=\"460\" y=\"95\" width=\"50\" height=\"50\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_IssueCard_di\" bpmnElement=\"Task_IssueCard\"><omgdc:Bounds x=\"610\" y=\"20\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_SendRejectionNotice_di\" bpmnElement=\"Task_SendRejectionNotice\"><omgdc:Bounds x=\"610\" y=\"140\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_CardIssued_di\" bpmnElement=\"End_CardIssued\"><omgdc:Bounds x=\"760\" y=\"42\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_ApplicationRejected_di\" bpmnElement=\"End_ApplicationRejected\"><omgdc:Bounds x=\"760\" y=\"162\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id=\"Flow_StartToCheck_di\" bpmnElement=\"Flow_StartToCheck\"><omgdi:waypoint x=\"196\" y=\"120\" /><omgdi:waypoint x=\"310\" y=\"120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_CheckToGateway_di\" bpmnElement=\"Flow_CheckToGateway\"><omgdi:waypoint x=\"410\" y=\"120\" /><omgdi:waypoint x=\"460\" y=\"120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_Approved_di\" bpmnElement=\"Flow_Approved\"><omgdi:waypoint x=\"510\" y=\"120\" /><omgdi:waypoint x=\"560\" y=\"120\" /><omgdi:waypoint x=\"560\" y=\"60\" /><omgdi:waypoint x=\"610\" y=\"60\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_Rejected_di\" bpmnElement=\"Flow_Rejected\"><omgdi:waypoint x=\"510\" y=\"120\" /><omgdi:waypoint x=\"560\" y=\"120\" /><omgdi:waypoint x=\"560\" y=\"180\" /><omgdi:waypoint x=\"610\" y=\"180\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_CardToDone_di\" bpmnElement=\"Flow_CardToDone\"><omgdi:waypoint x=\"710\" y=\"60\" /><omgdi:waypoint x=\"760\" y=\"60\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_NoticeToRejected_di\" bpmnElement=\"Flow_NoticeToRejected\"><omgdi:waypoint x=\"710\" y=\"180\" /><omgdi:waypoint x=\"760\" y=\"180\" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>", "01-user-onboarding.bpmn": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"Definitions_UserOnboarding\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_UserOnboarding\" name=\"User Onboarding\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"Start_RegistrationInitiated\" name=\"Registration initiated\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:serviceTask id=\"Task_ValidateRegistration\" name=\"Validate registration data\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:userTask id=\"Task_SetPasswordAndPreferences\" name=\"Set password and preferences\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:serviceTask id=\"Task_SendWelcomeEmail\" name=\"Send welcome email and activate\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:endEvent id=\"End_OnboardingCompleted\" name=\"Onboarding completed\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"Start_RegistrationInitiated\" targetRef=\"Task_ValidateRegistration\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_ValidateRegistration\" targetRef=\"Task_SetPasswordAndPreferences\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_SetPasswordAndPreferences\" targetRef=\"Task_SendWelcomeEmail\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_SendWelcomeEmail\" targetRef=\"End_OnboardingCompleted\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_UserOnboarding\"><bpmndi:BPMNPlane id=\"BPMNPlane_Process_UserOnboarding\" bpmnElement=\"Process_UserOnboarding\"><bpmndi:BPMNShape id=\"Start_RegistrationInitiated_di\" bpmnElement=\"Start_RegistrationInitiated\"><omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_ValidateRegistration_di\" bpmnElement=\"Task_ValidateRegistration\"><omgdc:Bounds x=\"310\" y=\"80\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_SetPasswordAndPreferences_di\" bpmnElement=\"Task_SetPasswordAndPreferences\"><omgdc:Bounds x=\"460\" y=\"80\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"Task_SendWelcomeEmail_di\" bpmnElement=\"Task_SendWelcomeEmail\"><omgdc:Bounds x=\"610\" y=\"80\" width=\"100\" height=\"80\" /></bpmndi:BPMNShape><bpmndi:BPMNShape id=\"End_OnboardingCompleted_di\" bpmnElement=\"End_OnboardingCompleted\"><omgdc:Bounds x=\"760\" y=\"102\" width=\"36\" height=\"36\" /></bpmndi:BPMNShape><bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\"><omgdi:waypoint x=\"196\" y=\"120\" /><omgdi:waypoint x=\"310\" y=\"120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\"><omgdi:waypoint x=\"410\" y=\"120\" /><omgdi:waypoint x=\"460\" y=\"120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\"><omgdi:waypoint x=\"560\" y=\"120\" /><omgdi:waypoint x=\"610\" y=\"120\" /></bpmndi:BPMNEdge><bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\"><omgdi:waypoint x=\"710\" y=\"120\" /><omgdi:waypoint x=\"760\" y=\"120\" /></bpmndi:BPMNEdge></bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>", "05-document-revision-cycle.bpmn": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" id=\"Definitions_DocumentRevision\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_DocumentRevision\" name=\"Document Revision Cycle\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"Start_DraftingInitiated\" name=\"Drafting initiated\">\n      <bpmn:outgoing>Flow_StartToDraft</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:exclusiveGateway id=\"Gateway_DraftEntry\" name=\"First draft or rework\">\n      <bpmn:incoming>Flow_StartToDraft</bpmn:incoming>\n      <bpmn:incoming>Flow_ReworkLoop</bpmn:incoming>\n      <bpmn:outgoing>Flow_EntryToDraft</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_DraftOrRevise\" name=\"Draft or revise document\">\n      <bpmn:incoming>Flow_EntryToDraft</bpmn:incoming>\n      <bpmn:outgoing>Flow_DraftToReview</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_ReviewDocument\" name=\"Review document\">\n      <bpmn:incoming>Flow_DraftToReview</bpmn:incoming>\n      <bpmn:outgoing>Flow_ReviewToGateway</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_IsDocumentApproved\" name=\"Approved?\">\n      <bpmn:incoming>Flow_ReviewToGateway</bpmn:incoming>\n      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>\n      <bpmn:outgoing>Flow_ReworkLoop</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:serviceTask id=\"Task_PublishDocument\" name=\"Publish document and notify\">\n      <bpmn:incoming>Flow_Approved</bpmn:incoming>\n      <bpmn:outgoing>Flow_PublishToEnd</bpmn:outgoing>\n    </bpmn:serviceTask>\n    <bpmn:endEvent id=\"End_DocumentPublished\" name=\"Document published\">\n      <bpmn:incoming>Flow_PublishToEnd</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_StartToDraft\" sourceRef=\"Start_DraftingInitiated\" targetRef=\"Gateway_DraftEntry\" />\n    <bpmn:sequenceFlow id=\"Flow_EntryToDraft\" sourceRef=\"Gateway_DraftEntry\" targetRef=\"Task_DraftOrRevise\" />\n    <bpmn:sequenceFlow id=\"Flow_DraftToReview\" sourceRef=\"Task_DraftOrRevise\" targetRef=\"Task_ReviewDocument\" />\n    <bpmn:sequenceFlow id=\"Flow_ReviewToGateway\" sourceRef=\"Task_ReviewDocument\" targetRef=\"Gateway_IsDocumentApproved\" />\n    <bpmn:sequenceFlow id=\"Flow_Approved\" name=\"Yes\" sourceRef=\"Gateway_IsDocumentApproved\" targetRef=\"Task_PublishDocument\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">isApproved == true</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_PublishToEnd\" sourceRef=\"Task_PublishDocument\" targetRef=\"End_DocumentPublished\" />\n    <bpmn:sequenceFlow id=\"Flow_ReworkLoop\" name=\"No (Needs changes)\" sourceRef=\"Gateway_IsDocumentApproved\" targetRef=\"Gateway_DraftEntry\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">isApproved == false</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_DocumentRevision\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Process_DocumentRevision\" bpmnElement=\"Process_DocumentRevision\">\n      <bpmndi:BPMNShape id=\"Start_DraftingInitiated_di\" bpmnElement=\"Start_DraftingInitiated\">\n        <omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_DraftEntry_di\" bpmnElement=\"Gateway_DraftEntry\">\n        <omgdc:Bounds x=\"250\" y=\"95\" width=\"50\" height=\"50\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_DraftOrRevise_di\" bpmnElement=\"Task_DraftOrRevise\">\n        <omgdc:Bounds x=\"350\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_ReviewDocument_di\" bpmnElement=\"Task_ReviewDocument\">\n        <omgdc:Bounds x=\"500\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_IsDocumentApproved_di\" bpmnElement=\"Gateway_IsDocumentApproved\">\n        <omgdc:Bounds x=\"650\" y=\"95\" width=\"50\" height=\"50\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_PublishDocument_di\" bpmnElement=\"Task_PublishDocument\">\n        <omgdc:Bounds x=\"760\" y=\"20\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"End_DocumentPublished_di\" bpmnElement=\"End_DocumentPublished\">\n        <omgdc:Bounds x=\"910\" y=\"42\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_StartToDraft_di\" bpmnElement=\"Flow_StartToDraft\">\n        <omgdi:waypoint x=\"196\" y=\"120\" />\n        <omgdi:waypoint x=\"250\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_EntryToDraft_di\" bpmnElement=\"Flow_EntryToDraft\">\n        <omgdi:waypoint x=\"300\" y=\"120\" />\n        <omgdi:waypoint x=\"350\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_DraftToReview_di\" bpmnElement=\"Flow_DraftToReview\">\n        <omgdi:waypoint x=\"450\" y=\"120\" />\n        <omgdi:waypoint x=\"500\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_ReviewToGateway_di\" bpmnElement=\"Flow_ReviewToGateway\">\n        <omgdi:waypoint x=\"600\" y=\"120\" />\n        <omgdi:waypoint x=\"650\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_Approved_di\" bpmnElement=\"Flow_Approved\">\n        <omgdi:waypoint x=\"700\" y=\"120\" />\n        <omgdi:waypoint x=\"730\" y=\"120\" />\n        <omgdi:waypoint x=\"730\" y=\"60\" />\n        <omgdi:waypoint x=\"760\" y=\"60\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_PublishToEnd_di\" bpmnElement=\"Flow_PublishToEnd\">\n        <omgdi:waypoint x=\"860\" y=\"60\" />\n        <omgdi:waypoint x=\"910\" y=\"60\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_ReworkLoop_di\" bpmnElement=\"Flow_ReworkLoop\">\n        <omgdi:waypoint x=\"675\" y=\"145\" />\n        <omgdi:waypoint x=\"675\" y=\"230\" />\n        <omgdi:waypoint x=\"275\" y=\"230\" />\n        <omgdi:waypoint x=\"275\" y=\"145\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "example-complete.bpmn": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"\n                  xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\"\n                  xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\"\n                  xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\"\n                  xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n                  id=\"Definitions_1\"\n                  targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_ExpenseApproval\" name=\"Expense approval\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"Start_ExpenseSubmitted\" name=\"Expense submitted\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_ReviewExpense\" name=\"Manager reviews expense\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_Approved\" name=\"Approved?\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_Yes</bpmn:outgoing>\n      <bpmn:outgoing>Flow_No</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_ProcessPayment\" name=\"Finance processes payment\">\n      <bpmn:incoming>Flow_Yes</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_NotifyRejection\" name=\"Notify employee of rejection\">\n      <bpmn:incoming>Flow_No</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_PaymentProcessed\" name=\"Payment processed\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:endEvent id=\"End_ExpenseRejected\" name=\"Expense rejected\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"Start_ExpenseSubmitted\" targetRef=\"Task_ReviewExpense\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_ReviewExpense\" targetRef=\"Gateway_Approved\" />\n    <bpmn:sequenceFlow id=\"Flow_Yes\" name=\"Yes\" sourceRef=\"Gateway_Approved\" targetRef=\"Task_ProcessPayment\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">approved == true</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_No\" name=\"No\" sourceRef=\"Gateway_Approved\" targetRef=\"Task_NotifyRejection\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">approved == false</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_ProcessPayment\" targetRef=\"End_PaymentProcessed\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_NotifyRejection\" targetRef=\"End_ExpenseRejected\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_ExpenseApproval\">\n      <bpmndi:BPMNShape id=\"Start_ExpenseSubmitted_di\" bpmnElement=\"Start_ExpenseSubmitted\">\n        <omgdc:Bounds x=\"152\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_ReviewExpense_di\" bpmnElement=\"Task_ReviewExpense\">\n        <omgdc:Bounds x=\"240\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_Approved_di\" bpmnElement=\"Gateway_Approved\">\n        <omgdc:Bounds x=\"395\" y=\"95\" width=\"50\" height=\"50\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_ProcessPayment_di\" bpmnElement=\"Task_ProcessPayment\">\n        <omgdc:Bounds x=\"500\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_NotifyRejection_di\" bpmnElement=\"Task_NotifyRejection\">\n        <omgdc:Bounds x=\"500\" y=\"200\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"End_PaymentProcessed_di\" bpmnElement=\"End_PaymentProcessed\">\n        <omgdc:Bounds x=\"660\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"End_ExpenseRejected_di\" bpmnElement=\"End_ExpenseRejected\">\n        <omgdc:Bounds x=\"660\" y=\"222\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <omgdi:waypoint x=\"188\" y=\"120\" />\n        <omgdi:waypoint x=\"240\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <omgdi:waypoint x=\"340\" y=\"120\" />\n        <omgdi:waypoint x=\"395\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_Yes_di\" bpmnElement=\"Flow_Yes\">\n        <omgdi:waypoint x=\"445\" y=\"120\" />\n        <omgdi:waypoint x=\"500\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_No_di\" bpmnElement=\"Flow_No\">\n        <omgdi:waypoint x=\"420\" y=\"145\" />\n        <omgdi:waypoint x=\"420\" y=\"240\" />\n        <omgdi:waypoint x=\"500\" y=\"240\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <omgdi:waypoint x=\"600\" y=\"120\" />\n        <omgdi:waypoint x=\"660\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <omgdi:waypoint x=\"600\" y=\"240\" />\n        <omgdi:waypoint x=\"660\" y=\"240\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n"};
   /*PRESETS_END*/
   const TEMPLATES = {"_blank": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"\n                  xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\"\n                  xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\"\n                  xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\"\n                  xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n                  id=\"Definitions_NewProcess\"\n                  targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_Novo\" name=\"Novo Processo\" isExecutable=\"false\">\n    <bpmn:startEvent id=\"Start_1\" name=\"Início\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_Novo\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Process_Novo\" bpmnElement=\"Process_Novo\">\n      <bpmndi:BPMNShape id=\"Start_1_di\" bpmnElement=\"Start_1\">\n        <omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "linear": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"Definitions_Linear\" targetNamespace=\"http://bpmn.io/schema/bpmn\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n  <bpmn:process id=\"Process_Linear\" isExecutable=\"false\" name=\"Processo linear\">\n    <bpmn:startEvent id=\"Start_DemandaRecebida\" name=\"Demanda recebida\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_RegistrarDemanda\" name=\"Registrar demanda\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_ExecutarDemanda\" name=\"Executar demanda\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_EntregarResultado\" name=\"Entregar resultado\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_DemandaConcluida\" name=\"Demanda concluída\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"Start_DemandaRecebida\" targetRef=\"Task_RegistrarDemanda\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_RegistrarDemanda\" targetRef=\"Task_ExecutarDemanda\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_ExecutarDemanda\" targetRef=\"Task_EntregarResultado\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_EntregarResultado\" targetRef=\"End_DemandaConcluida\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_Linear\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Process_Linear\" bpmnElement=\"Process_Linear\">\n      <bpmndi:BPMNShape id=\"Start_DemandaRecebida_di\" bpmnElement=\"Start_DemandaRecebida\">\n        <omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_RegistrarDemanda_di\" bpmnElement=\"Task_RegistrarDemanda\">\n        <omgdc:Bounds x=\"310\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_ExecutarDemanda_di\" bpmnElement=\"Task_ExecutarDemanda\">\n        <omgdc:Bounds x=\"460\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_EntregarResultado_di\" bpmnElement=\"Task_EntregarResultado\">\n        <omgdc:Bounds x=\"610\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"End_DemandaConcluida_di\" bpmnElement=\"End_DemandaConcluida\">\n        <omgdc:Bounds x=\"760\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <omgdi:waypoint x=\"196\" y=\"120\" />\n        <omgdi:waypoint x=\"310\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <omgdi:waypoint x=\"410\" y=\"120\" />\n        <omgdi:waypoint x=\"460\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <omgdi:waypoint x=\"560\" y=\"120\" />\n        <omgdi:waypoint x=\"610\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <omgdi:waypoint x=\"710\" y=\"120\" />\n        <omgdi:waypoint x=\"760\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "decision": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" id=\"Definitions_ComDecisao\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_ComDecisao\" isExecutable=\"false\" name=\"Processo com decisão\">\n    <bpmn:startEvent id=\"Start_PedidoRecebido\" name=\"Pedido recebido\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_AnalisarPedido\" name=\"Analisar pedido\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_PedidoAprovado\" name=\"Pedido aprovado?\" default=\"Flow_4\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_AtenderPedido\" name=\"Atender pedido\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_5</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_InformarRecusa\" name=\"Informar recusa\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n      <bpmn:outgoing>Flow_6</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_PedidoEncerrado\" name=\"Pedido encerrado\">\n      <bpmn:incoming>Flow_5</bpmn:incoming>\n      <bpmn:incoming>Flow_6</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"Start_PedidoRecebido\" targetRef=\"Task_AnalisarPedido\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_AnalisarPedido\" targetRef=\"Gateway_PedidoAprovado\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" name=\"Sim\" sourceRef=\"Gateway_PedidoAprovado\" targetRef=\"Task_AtenderPedido\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">pedidoAprovado == true</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_4\" name=\"Não\" sourceRef=\"Gateway_PedidoAprovado\" targetRef=\"Task_InformarRecusa\" />\n    <bpmn:sequenceFlow id=\"Flow_5\" sourceRef=\"Task_AtenderPedido\" targetRef=\"End_PedidoEncerrado\" />\n    <bpmn:sequenceFlow id=\"Flow_6\" sourceRef=\"Task_InformarRecusa\" targetRef=\"End_PedidoEncerrado\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_ComDecisao\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Process_ComDecisao\" bpmnElement=\"Process_ComDecisao\">\n      <bpmndi:BPMNShape id=\"Start_PedidoRecebido_di\" bpmnElement=\"Start_PedidoRecebido\">\n        <omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_AnalisarPedido_di\" bpmnElement=\"Task_AnalisarPedido\">\n        <omgdc:Bounds x=\"310\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_PedidoAprovado_di\" bpmnElement=\"Gateway_PedidoAprovado\">\n        <omgdc:Bounds x=\"460\" y=\"95\" width=\"50\" height=\"50\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_InformarRecusa_di\" bpmnElement=\"Task_InformarRecusa\">\n        <omgdc:Bounds x=\"610\" y=\"140\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_AtenderPedido_di\" bpmnElement=\"Task_AtenderPedido\">\n        <omgdc:Bounds x=\"610\" y=\"20\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"End_PedidoEncerrado_di\" bpmnElement=\"End_PedidoEncerrado\">\n        <omgdc:Bounds x=\"760\" y=\"162\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <omgdi:waypoint x=\"196\" y=\"120\" />\n        <omgdi:waypoint x=\"310\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <omgdi:waypoint x=\"410\" y=\"120\" />\n        <omgdi:waypoint x=\"460\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <omgdi:waypoint x=\"510\" y=\"120\" />\n        <omgdi:waypoint x=\"560\" y=\"120\" />\n        <omgdi:waypoint x=\"560\" y=\"60\" />\n        <omgdi:waypoint x=\"610\" y=\"60\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <omgdi:waypoint x=\"510\" y=\"120\" />\n        <omgdi:waypoint x=\"560\" y=\"120\" />\n        <omgdi:waypoint x=\"560\" y=\"180\" />\n        <omgdi:waypoint x=\"610\" y=\"180\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_5_di\" bpmnElement=\"Flow_5\">\n        <omgdi:waypoint x=\"710\" y=\"60\" />\n        <omgdi:waypoint x=\"735\" y=\"60\" />\n        <omgdi:waypoint x=\"735\" y=\"180\" />\n        <omgdi:waypoint x=\"760\" y=\"180\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_6_di\" bpmnElement=\"Flow_6\">\n        <omgdi:waypoint x=\"710\" y=\"180\" />\n        <omgdi:waypoint x=\"760\" y=\"180\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "lanes": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" id=\"Definitions_ComRaias\" targetNamespace=\"http://bpmn.io/schema/bpmn\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n  <bpmn:process id=\"Process_ComRaias\" isExecutable=\"false\" name=\"Processo com raias\">\n    <bpmn:laneSet id=\"LaneSet_ComRaias\">\n      <bpmn:lane id=\"Lane_Solicitante\" name=\"Solicitante\">\n        <bpmn:flowNodeRef>Start_NecessidadeIdentificada</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_AbrirSolicitacao</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>End_SolicitacaoAtendida</bpmn:flowNodeRef>\n      </bpmn:lane>\n      <bpmn:lane id=\"Lane_Atendente\" name=\"Atendente\">\n        <bpmn:flowNodeRef>Task_TratarSolicitacao</bpmn:flowNodeRef>\n        <bpmn:flowNodeRef>Task_ResponderSolicitante</bpmn:flowNodeRef>\n      </bpmn:lane>\n    </bpmn:laneSet>\n    <bpmn:startEvent id=\"Start_NecessidadeIdentificada\" name=\"Necessidade identificada\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:userTask id=\"Task_AbrirSolicitacao\" name=\"Abrir solicitação\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_TratarSolicitacao\" name=\"Tratar solicitação\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_ResponderSolicitante\" name=\"Responder solicitante\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:endEvent id=\"End_SolicitacaoAtendida\" name=\"Solicitação atendida\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"Start_NecessidadeIdentificada\" targetRef=\"Task_AbrirSolicitacao\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Task_AbrirSolicitacao\" targetRef=\"Task_TratarSolicitacao\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_TratarSolicitacao\" targetRef=\"Task_ResponderSolicitante\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_ResponderSolicitante\" targetRef=\"End_SolicitacaoAtendida\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_ComRaias\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Process_ComRaias\" bpmnElement=\"Process_ComRaias\">\n      <bpmndi:BPMNShape id=\"Lane_Solicitante_di\" bpmnElement=\"Lane_Solicitante\" isHorizontal=\"true\">\n        <omgdc:Bounds x=\"0\" y=\"60\" width=\"950\" height=\"360\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Lane_Atendente_di\" bpmnElement=\"Lane_Atendente\" isHorizontal=\"true\">\n        <omgdc:Bounds x=\"0\" y=\"420\" width=\"950\" height=\"360\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Start_NecessidadeIdentificada_di\" bpmnElement=\"Start_NecessidadeIdentificada\">\n        <omgdc:Bounds x=\"160\" y=\"222\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_AbrirSolicitacao_di\" bpmnElement=\"Task_AbrirSolicitacao\">\n        <omgdc:Bounds x=\"310\" y=\"200\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_TratarSolicitacao_di\" bpmnElement=\"Task_TratarSolicitacao\">\n        <omgdc:Bounds x=\"460\" y=\"560\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_ResponderSolicitante_di\" bpmnElement=\"Task_ResponderSolicitante\">\n        <omgdc:Bounds x=\"610\" y=\"560\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"End_SolicitacaoAtendida_di\" bpmnElement=\"End_SolicitacaoAtendida\">\n        <omgdc:Bounds x=\"760\" y=\"222\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <omgdi:waypoint x=\"196\" y=\"240\" />\n        <omgdi:waypoint x=\"310\" y=\"240\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <omgdi:waypoint x=\"410\" y=\"240\" />\n        <omgdi:waypoint x=\"435\" y=\"240\" />\n        <omgdi:waypoint x=\"435\" y=\"600\" />\n        <omgdi:waypoint x=\"460\" y=\"600\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <omgdi:waypoint x=\"560\" y=\"600\" />\n        <omgdi:waypoint x=\"610\" y=\"600\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <omgdi:waypoint x=\"710\" y=\"600\" />\n        <omgdi:waypoint x=\"735\" y=\"600\" />\n        <omgdi:waypoint x=\"735\" y=\"240\" />\n        <omgdi:waypoint x=\"760\" y=\"240\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "loop": "<?xml version='1.0' encoding='UTF-8'?>\n<bpmn:definitions xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:omgdc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:omgdi=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" id=\"Definitions_ComLaco\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_ComLaco\" isExecutable=\"false\" name=\"Processo com laço de revisão\">\n    <bpmn:startEvent id=\"Start_DocumentoSolicitado\" name=\"Documento solicitado\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:exclusiveGateway id=\"Gateway_PrimeiraVersaoOuCorrecao\" name=\"Primeira versão ou correção\">\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:incoming>Flow_6</bpmn:incoming>\n      <bpmn:outgoing>Flow_2</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:userTask id=\"Task_ElaborarOuCorrigirDocumento\" name=\"Elaborar ou corrigir documento\">\n      <bpmn:incoming>Flow_2</bpmn:incoming>\n      <bpmn:outgoing>Flow_3</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:userTask id=\"Task_RevisarDocumento\" name=\"Revisar documento\">\n      <bpmn:incoming>Flow_3</bpmn:incoming>\n      <bpmn:outgoing>Flow_4</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:exclusiveGateway id=\"Gateway_DocumentoAprovado\" name=\"Documento aprovado?\" default=\"Flow_6\">\n      <bpmn:incoming>Flow_4</bpmn:incoming>\n      <bpmn:outgoing>Flow_5</bpmn:outgoing>\n      <bpmn:outgoing>Flow_6</bpmn:outgoing>\n    </bpmn:exclusiveGateway>\n    <bpmn:endEvent id=\"End_DocumentoPublicado\" name=\"Documento publicado\">\n      <bpmn:incoming>Flow_5</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"Start_DocumentoSolicitado\" targetRef=\"Gateway_PrimeiraVersaoOuCorrecao\" />\n    <bpmn:sequenceFlow id=\"Flow_2\" sourceRef=\"Gateway_PrimeiraVersaoOuCorrecao\" targetRef=\"Task_ElaborarOuCorrigirDocumento\" />\n    <bpmn:sequenceFlow id=\"Flow_3\" sourceRef=\"Task_ElaborarOuCorrigirDocumento\" targetRef=\"Task_RevisarDocumento\" />\n    <bpmn:sequenceFlow id=\"Flow_4\" sourceRef=\"Task_RevisarDocumento\" targetRef=\"Gateway_DocumentoAprovado\" />\n    <bpmn:sequenceFlow id=\"Flow_5\" name=\"Sim\" sourceRef=\"Gateway_DocumentoAprovado\" targetRef=\"End_DocumentoPublicado\">\n      <bpmn:conditionExpression xsi:type=\"bpmn:tFormalExpression\">documentoAprovado == true</bpmn:conditionExpression>\n    </bpmn:sequenceFlow>\n    <bpmn:sequenceFlow id=\"Flow_6\" name=\"Não\" sourceRef=\"Gateway_DocumentoAprovado\" targetRef=\"Gateway_PrimeiraVersaoOuCorrecao\" />\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_Process_ComLaco\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_Process_ComLaco\" bpmnElement=\"Process_ComLaco\">\n      <bpmndi:BPMNShape id=\"Start_DocumentoSolicitado_di\" bpmnElement=\"Start_DocumentoSolicitado\">\n        <omgdc:Bounds x=\"160\" y=\"102\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_PrimeiraVersaoOuCorrecao_di\" bpmnElement=\"Gateway_PrimeiraVersaoOuCorrecao\">\n        <omgdc:Bounds x=\"310\" y=\"95\" width=\"50\" height=\"50\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_ElaborarOuCorrigirDocumento_di\" bpmnElement=\"Task_ElaborarOuCorrigirDocumento\">\n        <omgdc:Bounds x=\"460\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Task_RevisarDocumento_di\" bpmnElement=\"Task_RevisarDocumento\">\n        <omgdc:Bounds x=\"610\" y=\"80\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Gateway_DocumentoAprovado_di\" bpmnElement=\"Gateway_DocumentoAprovado\">\n        <omgdc:Bounds x=\"760\" y=\"95\" width=\"50\" height=\"50\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"End_DocumentoPublicado_di\" bpmnElement=\"End_DocumentoPublicado\">\n        <omgdc:Bounds x=\"910\" y=\"42\" width=\"36\" height=\"36\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <omgdi:waypoint x=\"196\" y=\"120\" />\n        <omgdi:waypoint x=\"310\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_2_di\" bpmnElement=\"Flow_2\">\n        <omgdi:waypoint x=\"360\" y=\"120\" />\n        <omgdi:waypoint x=\"460\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_3_di\" bpmnElement=\"Flow_3\">\n        <omgdi:waypoint x=\"560\" y=\"120\" />\n        <omgdi:waypoint x=\"610\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_4_di\" bpmnElement=\"Flow_4\">\n        <omgdi:waypoint x=\"710\" y=\"120\" />\n        <omgdi:waypoint x=\"760\" y=\"120\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_5_di\" bpmnElement=\"Flow_5\">\n        <omgdi:waypoint x=\"810\" y=\"120\" />\n        <omgdi:waypoint x=\"860\" y=\"120\" />\n        <omgdi:waypoint x=\"860\" y=\"60\" />\n        <omgdi:waypoint x=\"910\" y=\"60\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_6_di\" bpmnElement=\"Flow_6\">\n        <omgdi:waypoint x=\"785\" y=\"145\" />\n        <omgdi:waypoint x=\"785\" y=\"205\" />\n        <omgdi:waypoint x=\"335\" y=\"205\" />\n        <omgdi:waypoint x=\"335\" y=\"145\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>"};
+
+  // =====================================================================
+  // Porte da skill para o navegador (Fase 3B)
+  // =====================================================================
+  const SkillPort = (function () {
+    'use strict';
+
+    const BPMN_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
+    const BPMNDI_NS = 'http://www.omg.org/spec/BPMN/20100524/DI';
+    const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC';
+    const DI_NS = 'http://www.omg.org/spec/DD/20100524/DI';
+    const XSI_NS = 'http://www.w3.org/2001/XMLSchema-instance';
+
+    // ---- constantes de bpmn_tool.py ------------------------------------
+    const FLOW_NODE_TAGS = [
+      'startEvent', 'endEvent', 'task', 'userTask', 'serviceTask', 'sendTask', 'receiveTask',
+      'manualTask', 'scriptTask', 'businessRuleTask', 'exclusiveGateway', 'parallelGateway',
+      'inclusiveGateway', 'eventBasedGateway', 'complexGateway', 'subProcess', 'callActivity',
+      'transaction', 'adHocSubProcess', 'intermediateCatchEvent', 'intermediateThrowEvent',
+      'boundaryEvent'
+    ];
+    const SIZES = {
+      startEvent: [36, 36], endEvent: [36, 36], intermediateCatchEvent: [36, 36],
+      intermediateThrowEvent: [36, 36], boundaryEvent: [36, 36],
+      exclusiveGateway: [50, 50], parallelGateway: [50, 50], inclusiveGateway: [50, 50],
+      eventBasedGateway: [50, 50], complexGateway: [50, 50]
+    };
+    const DEFAULT_SIZE = [100, 80];
+    const COL_SPACING = 150;
+    const ROW_SPACING = 120;
+    const BASE_X = 160;
+    const BASE_Y = 120;
+    const LANE_SLOTS = 3;
+    const LANE_PADDING = 40;
+    const BACK_EDGE_DROP = 60;
+
+    const PREFERRED_TYPE_ALIAS = {
+      startEvent: 'start', endEvent: 'end', exclusiveGateway: 'xor', parallelGateway: 'and',
+      inclusiveGateway: 'or', eventBasedGateway: 'eventGateway',
+      intermediateCatchEvent: 'catch', intermediateThrowEvent: 'throw', boundaryEvent: 'boundary'
+    };
+
+    // ---- constantes de bpmn_build.py -----------------------------------
+    const TYPE_ALIASES = new Map(Object.entries({
+      start: 'startEvent', end: 'endEvent', task: 'task', userTask: 'userTask',
+      serviceTask: 'serviceTask', sendTask: 'sendTask', receiveTask: 'receiveTask',
+      manualTask: 'manualTask', scriptTask: 'scriptTask', businessRuleTask: 'businessRuleTask',
+      xor: 'exclusiveGateway', and: 'parallelGateway', or: 'inclusiveGateway',
+      eventGateway: 'eventBasedGateway', catch: 'intermediateCatchEvent',
+      throw: 'intermediateThrowEvent', boundary: 'boundaryEvent', subProcess: 'subProcess',
+      callActivity: 'callActivity', startEvent: 'startEvent', endEvent: 'endEvent',
+      exclusiveGateway: 'exclusiveGateway', parallelGateway: 'parallelGateway',
+      inclusiveGateway: 'inclusiveGateway', eventBasedGateway: 'eventBasedGateway',
+      intermediateCatchEvent: 'intermediateCatchEvent',
+      intermediateThrowEvent: 'intermediateThrowEvent', boundaryEvent: 'boundaryEvent'
+    }));
+    const EVENT_DEFINITIONS = new Map(Object.entries({
+      message: 'messageEventDefinition', timer: 'timerEventDefinition',
+      error: 'errorEventDefinition', signal: 'signalEventDefinition',
+      escalation: 'escalationEventDefinition', conditional: 'conditionalEventDefinition',
+      compensate: 'compensateEventDefinition', link: 'linkEventDefinition',
+      terminate: 'terminateEventDefinition'
+    }));
+    const EVENT_TAGS = new Set(['startEvent', 'endEvent', 'boundaryEvent',
+      'intermediateCatchEvent', 'intermediateThrowEvent']);
+    const ACTIVITY_TAGS = new Set(['task', 'userTask', 'serviceTask', 'sendTask', 'receiveTask',
+      'manualTask', 'scriptTask', 'businessRuleTask', 'subProcess', 'callActivity']);
+    const GATEWAY_TAGS = new Set(['exclusiveGateway', 'parallelGateway', 'inclusiveGateway',
+      'eventBasedGateway', 'complexGateway']);
+    const ID_PREFIXES = {
+      startEvent: 'Start', endEvent: 'End', exclusiveGateway: 'Gateway', parallelGateway: 'Gateway',
+      inclusiveGateway: 'Gateway', eventBasedGateway: 'Gateway', intermediateCatchEvent: 'Event',
+      intermediateThrowEvent: 'Event', boundaryEvent: 'Event', subProcess: 'SubProcess',
+      callActivity: 'Activity'
+    };
+    const DEFAULT_ID_PREFIX = 'Task';
+
+    // ---- erros ----------------------------------------------------------
+    // `code` e estavel (os testes casam com a mensagem do SpecError do Python);
+    // `message` e o texto em pt-BR mostrado ao usuario.
+    class SpecError extends Error {
+      constructor(code, message) {
+        super(message);
+        this.name = 'SpecError';
+        this.code = code;
+      }
+    }
+    class ExtractError extends Error {
+      constructor(code, message) {
+        super(message);
+        this.name = 'ExtractError';
+        this.code = code;
+      }
+    }
+
+    // ---- helpers com a semantica do Python ------------------------------
+    function truthy(value) {
+      if (value === null || value === undefined || value === false || value === 0 || value === '') return false;
+      if (Array.isArray(value)) return value.length > 0;
+      if (typeof value === 'object') return Object.keys(value).length > 0;
+      return true;
+    }
+
+    function isPlainObject(value) {
+      return value !== null && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function typeName(value) {
+      if (value === null || value === undefined) return 'nulo';
+      if (Array.isArray(value)) return 'lista';
+      if (typeof value === 'object') return 'objeto';
+      if (typeof value === 'string') return 'texto';
+      if (typeof value === 'number') return 'número';
+      return 'booleano';
+    }
+
+    function shown(value) {
+      return value === undefined || value === null ? '(ausente)' : String(value);
+    }
+
+    // round() do Python arredonda a metade para o par (banker's rounding).
+    function pyRound(x) {
+      const floor = Math.floor(x);
+      const diff = x - floor;
+      if (diff < 0.5) return floor;
+      if (diff > 0.5) return floor + 1;
+      return floor % 2 === 0 ? floor : floor + 1;
+    }
+
+    function inOrder(list) {
+      return Array.from(new Set(list));
+    }
+
+    // =====================================================================
+    // Layout: build_graph + compute_diagram
+    // =====================================================================
+    function sizeOf(entry) {
+      if (entry.size) return entry.size;
+      return SIZES[entry.tag] || DEFAULT_SIZE;
+    }
+
+    // input: { nodes: [{id, tag, size?}], flows: [{id, src, tgt}], lanes: null | [{id, refs: [id]}] }
+    function buildGraph(input) {
+      const nodes = new Map();
+      (input.nodes || []).forEach(entry => {
+        if (!entry.id) return;
+        nodes.set(entry.id, { tag: entry.tag, size: entry.size, inEdges: [], outEdges: [] });
+      });
+      const edges = [];
+      (input.flows || []).forEach(flow => {
+        if (!flow.id || !flow.src || !flow.tgt) return;
+        edges.push([flow.id, flow.src, flow.tgt]);
+        if (nodes.has(flow.src)) nodes.get(flow.src).outEdges.push([flow.id, flow.tgt]);
+        if (nodes.has(flow.tgt)) nodes.get(flow.tgt).inEdges.push([flow.id, flow.src]);
+      });
+      return { nodes: nodes, edges: edges };
+    }
+
+    // Ordem topologica (Kahn). Os sucessores entram na fila na ordem em que
+    // aparecem: o Python itera um `set`, cuja ordem muda a cada execucao
+    // (PYTHONHASHSEED); a ordem de primeira aparicao e uma das ordens possiveis e e estavel.
+    function topoOrder(nodes) {
+      const ids = Array.from(nodes.keys());
+      const succ = new Map();
+      const pred = new Map();
+      ids.forEach(id => {
+        const node = nodes.get(id);
+        succ.set(id, node.outEdges.map(e => e[1]).filter(t => nodes.has(t)));
+        pred.set(id, node.inEdges.map(e => e[1]).filter(s => nodes.has(s)));
+      });
+      const remaining = new Map();
+      ids.forEach(id => remaining.set(id, new Set(pred.get(id)).size));
+      const order = [];
+      const seen = new Set();
+      const queue = ids.filter(id => remaining.get(id) === 0);
+      let qi = 0;
+      while (qi < queue.length) {
+        const id = queue[qi];
+        qi += 1;
+        if (seen.has(id)) continue;
+        seen.add(id);
+        order.push(id);
+        inOrder(succ.get(id)).forEach(t => {
+          if (seen.has(t)) return;
+          remaining.set(t, remaining.get(t) - 1);
+          if (remaining.get(t) <= 0) queue.push(t);
+        });
+      }
+      if (order.length < ids.length) {
+        // Ciclo: o que sobrou entra por "menos predecessores ainda nao resolvidos".
+        const rest = ids.filter(id => !seen.has(id));
+        while (rest.length) {
+          const key = new Map();
+          rest.forEach(id => key.set(id, inOrder(pred.get(id)).filter(p => !seen.has(p)).length));
+          rest.sort((a, b) => key.get(a) - key.get(b));
+          const id = rest.shift();
+          seen.add(id);
+          order.push(id);
+        }
+      }
+      return { order: order, pred: pred, succ: succ };
+    }
+
+    function assignColumns(order, pred) {
+      const col = new Map();
+      order.forEach(id => {
+        const placed = inOrder(pred.get(id)).filter(p => col.has(p));
+        col.set(id, placed.length ? 1 + Math.max.apply(null, placed.map(p => col.get(p))) : 0);
+      });
+      return col;
+    }
+
+    function assignRawRows(nodes, order, starts) {
+      const rawRow = new Map();
+      starts.forEach((id, i) => rawRow.set(id, i - (starts.length - 1) / 2));
+      order.forEach(id => {
+        if (!rawRow.has(id)) return;
+        const row0 = rawRow.get(id);
+        const targets = [];
+        nodes.get(id).outEdges.forEach(edge => {
+          const t = edge[1];
+          if (nodes.has(t) && targets.indexOf(t) < 0) targets.push(t);
+        });
+        targets.forEach((t, i) => {
+          if (rawRow.has(t)) return;
+          rawRow.set(t, row0 + (targets.length === 1 ? 0 : (i - (targets.length - 1) / 2)));
+        });
+      });
+      nodes.forEach((_node, id) => { if (!rawRow.has(id)) rawRow.set(id, 0); });
+      return rawRow;
+    }
+
+    function resolveCollisions(order, col, finalRow) {
+      const occupied = new Set();
+      const positions = new Map();
+      order.forEach(id => {
+        const c = col.get(id);
+        let r = finalRow.get(id);
+        let key = c + ',' + pyRound(r * 2);
+        if (occupied.has(key)) {
+          let k = 1;
+          let moved = false;
+          while (!moved) {
+            [k, -k].forEach(delta => {
+              if (moved) return;
+              const candidate = r + delta;
+              const candidateKey = c + ',' + pyRound(candidate * 2);
+              if (!occupied.has(candidateKey)) {
+                r = candidate;
+                key = candidateKey;
+                moved = true;
+              }
+            });
+            if (!moved) k += 1;
+          }
+        }
+        occupied.add(key);
+        positions.set(id, [c, r]);
+      });
+      return positions;
+    }
+
+    function edgeWaypoints(srcBounds, tgtBounds, srcCol, tgtCol) {
+      const [sx, sy, sw, sh] = srcBounds;
+      const [tx, ty, tw, th] = tgtBounds;
+      if (tgtCol <= srcCol) {
+        // Laco de retrabalho: desce, atravessa por baixo e sobe.
+        const start = [sx + sw / 2, sy + sh];
+        const end = [tx + tw / 2, ty + th];
+        const dropY = Math.max(sy + sh, ty + th) + BACK_EDGE_DROP;
+        return [start, [start[0], dropY], [end[0], dropY], end];
+      }
+      const start = [sx + sw, sy + sh / 2];
+      const end = [tx, ty + th / 2];
+      if (Math.abs(start[1] - end[1]) < 1) return [start, end];
+      const midX = (start[0] + end[0]) / 2;
+      return [start, [midX, start[1]], [midX, end[1]], end];
+    }
+
+    // Resultado em inteiros (int() do Python trunca em direcao a zero):
+    //   { lanes: [{id, x, y, width, height}],
+    //     shapes: [{id, tag, x, y, width, height}],
+    //     edges: [{id, waypoints: [{x, y}]}] }
+    function computeLayout(input) {
+      const graph = buildGraph(input);
+      const nodes = graph.nodes;
+      const result = { lanes: [], shapes: [], edges: [] };
+      if (nodes.size === 0) return result;
+
+      const topo = topoOrder(nodes);
+      const order = topo.order;
+      const col = assignColumns(order, topo.pred);
+      const starts = order.filter(id => nodes.get(id).tag === 'startEvent');
+      const rawRow = assignRawRows(nodes, order, starts);
+
+      const laneOf = input.lanes ? new Map() : null;
+      if (laneOf) {
+        input.lanes.forEach((lane, i) => (lane.refs || []).forEach(ref => laneOf.set(String(ref).trim(), i)));
+      }
+      const finalRow = new Map();
+      const halfSpan = (LANE_SLOTS - 1) / 2;
+      nodes.forEach((_node, id) => {
+        if (!laneOf) {
+          finalRow.set(id, rawRow.get(id));
+          return;
+        }
+        const r = Math.max(-halfSpan, Math.min(halfSpan, rawRow.get(id)));
+        finalRow.set(id, (laneOf.has(id) ? laneOf.get(id) : 0) * LANE_SLOTS + halfSpan + r);
+      });
+
+      const positions = resolveCollisions(order, col, finalRow);
+      const bounds = new Map();
+      positions.forEach((position, id) => {
+        const node = nodes.get(id);
+        const size = sizeOf(node);
+        const x = BASE_X + position[0] * COL_SPACING;
+        const y = BASE_Y + position[1] * ROW_SPACING - size[1] / 2;
+        bounds.set(id, [x, y, size[0], size[1]]);
+      });
+
+      if (laneOf) {
+        let maxCol = 0;
+        positions.forEach(position => { if (position[0] > maxCol) maxCol = position[0]; });
+        const width = BASE_X + (maxCol + 1) * COL_SPACING + LANE_PADDING;
+        const height = LANE_SLOTS * ROW_SPACING;
+        input.lanes.forEach((lane, i) => {
+          const top = BASE_Y - ROW_SPACING / 2 + i * height;
+          result.lanes.push({ id: lane.id, x: 0, y: Math.trunc(top),
+            width: Math.trunc(width), height: Math.trunc(height) });
+        });
+      }
+
+      positions.forEach((_position, id) => {
+        const b = bounds.get(id);
+        result.shapes.push({ id: id, tag: nodes.get(id).tag,
+          x: Math.trunc(b[0]), y: Math.trunc(b[1]), width: b[2], height: b[3] });
+      });
+
+      graph.edges.forEach(edge => {
+        const id = edge[0], src = edge[1], tgt = edge[2];
+        if (!bounds.has(src) || !bounds.has(tgt)) return;
+        const points = edgeWaypoints(bounds.get(src), bounds.get(tgt), col.get(src), col.get(tgt));
+        result.edges.push({ id: id, waypoints: points.map(p => ({ x: Math.trunc(p[0]), y: Math.trunc(p[1]) })) });
+      });
+      return result;
+    }
+
+    // =====================================================================
+    // XML minimo (mesma formatacao do ElementTree + ET.indent)
+    // =====================================================================
+    function escapeText(value) {
+      return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function escapeAttr(value) {
+      return escapeText(value).replace(/"/g, '&quot;').replace(/\r/g, '&#13;')
+        .replace(/\n/g, '&#10;').replace(/\t/g, '&#09;');
+    }
+    function xnode(tag, attrs, children, text) {
+      return { tag: tag, attrs: attrs || [], children: children || [], text: text };
+    }
+    function serialize(node, depth) {
+      const pad = '  '.repeat(depth);
+      const attrs = node.attrs.map(a => ' ' + a[0] + '="' + escapeAttr(a[1]) + '"').join('');
+      if (node.children.length) {
+        return pad + '<' + node.tag + attrs + '>\n'
+          + node.children.map(child => serialize(child, depth + 1)).join('')
+          + pad + '</' + node.tag + '>\n';
+      }
+      if (node.text !== undefined && node.text !== null && node.text !== '') {
+        return pad + '<' + node.tag + attrs + '>' + escapeText(node.text) + '</' + node.tag + '>\n';
+      }
+      return pad + '<' + node.tag + attrs + ' />\n';
+    }
+
+    // =====================================================================
+    // Spec -> modelo (bpmn_build._normalise_* e build_tree)
+    // =====================================================================
+    const COMBINING = /[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]/g;
+
+    function stripAccents(text) {
+      return String(text).normalize('NFKD').replace(COMBINING, '');
+    }
+
+    // 'Conferir nota fiscal' -> 'ConferirNotaFiscal'; so a 1a letra de cada pedaco sobe.
+    function pascalCase(text) {
+      return stripAccents(text).split(/[^0-9A-Za-z]+/).filter(Boolean)
+        .map(token => token.charAt(0).toUpperCase() + token.slice(1)).join('');
+    }
+
+    function uniqueId(candidate, taken) {
+      if (!taken.has(candidate)) {
+        taken.add(candidate);
+        return candidate;
+      }
+      let n = 2;
+      while (taken.has(candidate + '_' + n)) n += 1;
+      const unique = candidate + '_' + n;
+      taken.add(unique);
+      return unique;
+    }
+
+    function requireText(value, what) {
+      if (truthy(value) && typeof value !== 'string') {
+        throw new SpecError('field-type', what + ' precisa ser um texto (recebido: ' + typeName(value) + ').');
+      }
+    }
+
+    function sortedKeys(map) {
+      return Array.from(map.keys()).sort().join(', ');
+    }
+
+    function checkBoundaryHosts(resolved) {
+      const tagOfSpecId = new Map(resolved.map(r => [r.specId, r.tag]));
+      resolved.forEach(r => {
+        if (r.tag !== 'boundaryEvent') return;
+        const host = r.node.attachedTo;
+        if (!truthy(host)) {
+          throw new SpecError('boundary-no-host',
+            "O evento de borda '" + r.specId + "' precisa de 'attachedTo' com a atividade a que se prende.");
+        }
+        if (!tagOfSpecId.has(host)) {
+          throw new SpecError('boundary-unknown-host',
+            "O evento de borda '" + r.specId + "' está preso a um nó que não existe: '" + shown(host) + "'.");
+        }
+        if (!ACTIVITY_TAGS.has(tagOfSpecId.get(host))) {
+          throw new SpecError('boundary-bad-host',
+            "O evento de borda '" + r.specId + "' está preso a '" + host + "', que é um '"
+            + tagOfSpecId.get(host) + "' — eventos de borda só se prendem a atividades.");
+        }
+      });
+    }
+
+    function normaliseNodes(spec) {
+      const nodes = spec.nodes;
+      if (!Array.isArray(nodes) || nodes.length === 0) {
+        throw new SpecError('nodes-empty', "O spec precisa ter uma lista 'nodes' não vazia.");
+      }
+      const taken = new Set();
+      const seenSpecIds = new Set();
+      const resolved = [];
+      nodes.forEach(node => {
+        if (!isPlainObject(node)) {
+          throw new SpecError('node-not-object',
+            'Cada nó precisa ser um objeto (recebido: ' + typeName(node) + ').');
+        }
+        const specId = node.id;
+        if (!truthy(specId) || typeof specId !== 'string') {
+          throw new SpecError('node-no-id', "Nó sem 'id' utilizável: " + JSON.stringify(node));
+        }
+        if (seenSpecIds.has(specId)) {
+          throw new SpecError('node-duplicate-id', "Id de nó repetido no spec: '" + specId + "'.");
+        }
+        seenSpecIds.add(specId);
+
+        const alias = node.type;
+        if (!TYPE_ALIASES.has(alias)) {
+          throw new SpecError('node-unknown-type', "O nó '" + specId + "' tem o tipo desconhecido '"
+            + shown(alias) + "' (tipos conhecidos: " + sortedKeys(TYPE_ALIASES) + ').');
+        }
+        const tag = TYPE_ALIASES.get(alias);
+
+        const event = node.event;
+        if (event !== undefined && event !== null) {
+          if (!EVENT_DEFINITIONS.has(event)) {
+            throw new SpecError('node-unknown-event', "O nó '" + specId + "' tem o evento desconhecido '"
+              + shown(event) + "' (eventos conhecidos: " + sortedKeys(EVENT_DEFINITIONS) + ').');
+          }
+          if (!EVENT_TAGS.has(tag)) {
+            throw new SpecError('node-event-not-allowed', "O nó '" + specId + "' é um '" + alias
+              + "', que não pode ter definição de evento — 'event' só vale em start/end/catch/throw/boundary.");
+          }
+        }
+
+        requireText(node.name, "O campo 'name' do nó '" + specId + "'");
+        const label = truthy(node.name) ? node.name : specId;
+        const prefix = ID_PREFIXES[tag] || DEFAULT_ID_PREFIX;
+        const generated = uniqueId(prefix + '_' + pascalCase(label), taken);
+        resolved.push({ specId: specId, tag: tag, id: generated, node: node });
+      });
+      checkBoundaryHosts(resolved);
+      return resolved;
+    }
+
+    function normaliseFlows(spec, idOf, tagOfSpecId) {
+      let flows = spec.flows;
+      if (flows === undefined || flows === null) flows = [];
+      if (!Array.isArray(flows)) throw new SpecError('flows-not-list', "'flows' precisa ser uma lista.");
+      return flows.map((flow, index) => {
+        const n = index + 1;
+        if (!isPlainObject(flow)) {
+          throw new SpecError('flow-not-object',
+            'O fluxo nº ' + n + ' precisa ser um objeto (recebido: ' + typeName(flow) + ').');
+        }
+        const src = flow.from;
+        const tgt = flow.to;
+        if (!truthy(src) || !truthy(tgt)) {
+          throw new SpecError('flow-missing-ends',
+            "O fluxo nº " + n + " precisa de 'from' e 'to': " + JSON.stringify(flow));
+        }
+        if (!idOf.has(src)) {
+          throw new SpecError('flow-unknown-source', 'O fluxo nº ' + n + " começa num nó que não existe: '" + shown(src) + "'.");
+        }
+        if (!idOf.has(tgt)) {
+          throw new SpecError('flow-unknown-target', 'O fluxo nº ' + n + " termina num nó que não existe: '" + shown(tgt) + "'.");
+        }
+        requireText(flow.label, "O campo 'label' do fluxo nº " + n);
+        requireText(flow.condition, "O campo 'condition' do fluxo nº " + n);
+        if (truthy(flow.default)) {
+          // O ramo default e o "nenhuma condicao bateu": so existe em gateway e nao tem condicao.
+          if (!GATEWAY_TAGS.has(tagOfSpecId.get(src))) {
+            throw new SpecError('flow-default-not-gateway', 'O fluxo nº ' + n + " está marcado como default mas sai de '"
+              + src + "', que é um '" + tagOfSpecId.get(src) + "' — só gateways têm fluxo default.");
+          }
+          if (truthy(flow.condition)) {
+            throw new SpecError('flow-default-with-condition', 'O fluxo nº ' + n
+              + ' está marcado como default E tem condição — o default é o ramo tomado quando nenhuma condição bateu.');
+          }
+        }
+        return { id: 'Flow_' + n, src: idOf.get(src), tgt: idOf.get(tgt), flow: flow };
+      });
+    }
+
+    function normaliseLanes(spec, resolvedNodes) {
+      const lanes = spec.lanes;
+      if (!truthy(lanes)) return [];
+      if (!Array.isArray(lanes)) throw new SpecError('lanes-not-list', "'lanes' precisa ser uma lista.");
+      const laneIds = [];
+      const members = new Map();
+      const taken = new Set();
+      lanes.forEach((lane, index) => {
+        const n = index + 1;
+        if (!isPlainObject(lane)) {
+          throw new SpecError('lane-not-object', 'A raia nº ' + n + ' precisa ser um objeto (recebido: ' + typeName(lane) + ').');
+        }
+        const specLaneId = truthy(lane.id) ? lane.id : lane.name;
+        if (!truthy(specLaneId)) {
+          throw new SpecError('lane-no-id', "A raia nº " + n + " precisa de um 'id' ou de um 'name'.");
+        }
+        if (members.has(specLaneId)) {
+          throw new SpecError('lane-duplicate-id', "Id de raia repetido no spec: '" + specLaneId + "'.");
+        }
+        requireText(lane.name, "O campo 'name' da raia nº " + n);
+        const label = truthy(lane.name) ? lane.name : specLaneId;
+        laneIds.push({ specId: specLaneId, id: uniqueId('Lane_' + pascalCase(label), taken), label: label });
+        members.set(specLaneId, []);
+      });
+      const defaultLane = laneIds[0].specId;
+      resolvedNodes.forEach(r => {
+        requireText(r.node.lane, "O campo 'lane' do nó '" + r.specId + "'");
+        const laneRef = truthy(r.node.lane) ? r.node.lane : defaultLane;
+        if (!members.has(laneRef)) {
+          throw new SpecError('node-unknown-lane', "O nó '" + r.specId + "' aponta para uma raia que não existe: '" + shown(laneRef) + "'.");
+        }
+        members.get(laneRef).push(r.id);
+      });
+      return laneIds.map(l => ({ id: l.id, label: l.label, members: members.get(l.specId) }));
+    }
+
+    function processIdOf(spec) {
+      const raw = truthy(spec.id) ? spec.id : (truthy(spec.name) ? spec.name : 'Process');
+      if (typeof raw === 'string' && raw.indexOf('Process_') === 0) return raw;
+      return 'Process_' + pascalCase(String(raw));
+    }
+
+    // Valida o spec e devolve o modelo: tudo que o XML precisa, ja com os ids gerados.
+    function buildModel(spec) {
+      if (!isPlainObject(spec)) {
+        throw new SpecError('spec-not-object', 'O spec precisa ser um objeto JSON (recebido: ' + typeName(spec) + ').');
+      }
+      const nodes = normaliseNodes(spec);
+      const idOf = new Map(nodes.map(r => [r.specId, r.id]));
+      const tagOfSpecId = new Map(nodes.map(r => [r.specId, r.tag]));
+      const flows = normaliseFlows(spec, idOf, tagOfSpecId);
+      const lanes = normaliseLanes(spec, nodes);
+      requireText(spec.name, "O campo 'name' do processo");
+
+      const incoming = new Map(nodes.map(r => [r.id, []]));
+      const outgoing = new Map(nodes.map(r => [r.id, []]));
+      const defaultOf = new Map();
+      flows.forEach(f => {
+        outgoing.get(f.src).push(f.id);
+        incoming.get(f.tgt).push(f.id);
+        if (truthy(f.flow.default)) defaultOf.set(f.src, f.id);
+      });
+      const processId = processIdOf(spec);
+      const suffix = processId.indexOf('_') < 0 ? processId : processId.slice(processId.indexOf('_') + 1);
+      nodes.forEach(r => {
+        r.incoming = incoming.get(r.id);
+        r.outgoing = outgoing.get(r.id);
+        r.defaultFlow = defaultOf.get(r.id);
+        r.hostId = r.tag === 'boundaryEvent' ? idOf.get(r.node.attachedTo) : null;
+      });
+      return {
+        processId: processId,
+        definitionsId: 'Definitions_' + suffix,
+        laneSetId: 'LaneSet_' + suffix,
+        name: truthy(spec.name) ? spec.name : null,
+        executable: truthy(spec.executable),
+        nodes: nodes,
+        flows: flows,
+        lanes: lanes
+      };
+    }
+
+    // A entrada do layout a partir do modelo (o mesmo grafo que o `layout` leria do XML gerado).
+    function layoutInputOfModel(model) {
+      return {
+        nodes: model.nodes.map(r => ({ id: r.id, tag: r.tag })),
+        flows: model.flows.map(f => ({ id: f.id, src: f.src, tgt: f.tgt })),
+        lanes: model.lanes.length ? model.lanes.map(l => ({ id: l.id, refs: l.members })) : null
+      };
+    }
+
+    function layoutDiagramNode(model) {
+      const layout = computeLayout(layoutInputOfModel(model));
+      const planeChildren = [];
+      layout.lanes.forEach(lane => {
+        planeChildren.push(xnode('bpmndi:BPMNShape',
+          [['id', lane.id + '_di'], ['bpmnElement', lane.id], ['isHorizontal', 'true']],
+          [xnode('omgdc:Bounds', [['x', lane.x], ['y', lane.y], ['width', lane.width], ['height', lane.height]])]));
+      });
+      layout.shapes.forEach(shape => {
+        planeChildren.push(xnode('bpmndi:BPMNShape', [['id', shape.id + '_di'], ['bpmnElement', shape.id]],
+          [xnode('omgdc:Bounds', [['x', shape.x], ['y', shape.y], ['width', shape.width], ['height', shape.height]])]));
+      });
+      layout.edges.forEach(edge => {
+        planeChildren.push(xnode('bpmndi:BPMNEdge', [['id', edge.id + '_di'], ['bpmnElement', edge.id]],
+          edge.waypoints.map(p => xnode('omgdi:waypoint', [['x', p.x], ['y', p.y]]))));
+      });
+      const plane = xnode('bpmndi:BPMNPlane',
+        [['id', 'BPMNPlane_' + model.processId], ['bpmnElement', model.processId]], planeChildren);
+      return xnode('bpmndi:BPMNDiagram', [['id', 'BPMNDiagram_' + model.processId]], [plane]);
+    }
+
+    function processNode(model) {
+      const attrs = [['id', model.processId], ['isExecutable', model.executable ? 'true' : 'false']];
+      if (model.name) attrs.push(['name', model.name]);
+      const children = [];
+      if (model.lanes.length) {
+        children.push(xnode('bpmn:laneSet', [['id', model.laneSetId]], model.lanes.map(lane =>
+          xnode('bpmn:lane', [['id', lane.id], ['name', lane.label]],
+            lane.members.map(member => xnode('bpmn:flowNodeRef', [], [], member))))));
+      }
+      model.nodes.forEach(r => {
+        const nodeAttrs = [['id', r.id]];
+        if (truthy(r.node.name)) nodeAttrs.push(['name', r.node.name]);
+        if (r.tag === 'boundaryEvent') {
+          nodeAttrs.push(['attachedToRef', r.hostId]);
+          nodeAttrs.push(['cancelActivity', r.node.interrupting === false ? 'false' : 'true']);
+        }
+        if (r.defaultFlow) nodeAttrs.push(['default', r.defaultFlow]);
+        const kids = r.incoming.map(f => xnode('bpmn:incoming', [], [], f))
+          .concat(r.outgoing.map(f => xnode('bpmn:outgoing', [], [], f)));
+        if (truthy(r.node.event)) kids.push(xnode('bpmn:' + EVENT_DEFINITIONS.get(r.node.event)));
+        children.push(xnode('bpmn:' + r.tag, nodeAttrs, kids));
+      });
+      model.flows.forEach(f => {
+        const flowAttrs = [['id', f.id]];
+        if (truthy(f.flow.label)) flowAttrs.push(['name', f.flow.label]);
+        flowAttrs.push(['sourceRef', f.src], ['targetRef', f.tgt]);
+        const kids = [];
+        if (truthy(f.flow.condition)) {
+          kids.push(xnode('bpmn:conditionExpression', [['xsi:type', 'bpmn:tFormalExpression']], [], f.flow.condition));
+        }
+        children.push(xnode('bpmn:sequenceFlow', flowAttrs, kids));
+      });
+      return xnode('bpmn:process', attrs, children);
+    }
+
+    // spec (objeto) -> texto BPMN 2.0. `options.layout === false` omite o DI (como `bpmn_build.build_xml`);
+    // por padrao ja sai com o layout do `bpmn_tool layout` (como `bpmn_build.py` inteiro).
+    function specToXml(spec, options) {
+      const model = buildModel(spec);
+      const children = [processNode(model)];
+      if (!options || options.layout !== false) children.push(layoutDiagramNode(model));
+      const root = xnode('bpmn:definitions', [
+        ['xmlns:bpmn', BPMN_NS], ['xmlns:bpmndi', BPMNDI_NS], ['xmlns:omgdc', DC_NS],
+        ['xmlns:omgdi', DI_NS], ['xmlns:xsi', XSI_NS],
+        ['id', model.definitionsId], ['targetNamespace', 'http://bpmn.io/schema/bpmn']
+      ], children);
+      return '<?xml version="1.0" encoding="UTF-8"?>\n' + serialize(root, 0);
+    }
+
+    // =====================================================================
+    // XML -> spec (bpmn_tool.extract_spec)
+    // =====================================================================
+    function bpmnChildren(parent, localName) {
+      return Array.from(parent.children).filter(c => c.namespaceURI === BPMN_NS && c.localName === localName);
+    }
+
+    function eventKind(nodeEl) {
+      const suffix = 'EventDefinition';
+      for (const child of Array.from(nodeEl.children)) {
+        const tag = child.localName;
+        if (tag.endsWith(suffix)) return tag.slice(0, tag.length - suffix.length);
+      }
+      return null;
+    }
+
+    // Devolve { spec, warnings }. Os avisos (pt-BR) dizem o que se perde numa reconstrucao.
+    function extractSpecFromXml(xmlText) {
+      const doc = new DOMParser().parseFromString(String(xmlText), 'application/xml');
+      if (doc.getElementsByTagName('parsererror').length) {
+        throw new ExtractError('not-well-formed', 'O diagrama não é um XML bem formado.');
+      }
+      const processes = bpmnChildren(doc.documentElement, 'process');
+      if (!processes.length) throw new ExtractError('no-process', 'Não há nenhum <bpmn:process> no diagrama.');
+      const processEl = processes[0];
+      const warnings = [];
+
+      if (processes.length > 1) {
+        warnings.push('O diagrama tem ' + processes.length + " processos (pools); só '" + processEl.getAttribute('id')
+          + "' foi exportado — os outros se perderiam ao reconstruir pelo spec.");
+      }
+      const nested = Array.from(processEl.children).filter(child =>
+        ['subProcess', 'transaction', 'adHocSubProcess'].indexOf(child.localName) >= 0
+        && Array.from(child.children).some(inner => FLOW_NODE_TAGS.indexOf(inner.localName) >= 0));
+      if (nested.length) {
+        warnings.push('O(s) subprocesso(s) expandido(s) ' + nested.map(n => n.getAttribute('id') || '?').join(', ')
+          + ' mantêm o fluxo interno, que o formato de spec não carrega — reconstruir por este spec os esvaziaria.');
+      }
+
+      const spec = { id: processEl.getAttribute('id') || 'Process_1' };
+      if (processEl.getAttribute('name')) spec.name = processEl.getAttribute('name');
+      spec.executable = processEl.getAttribute('isExecutable') === 'true';
+
+      const laneOf = new Map();
+      let lanes = [];
+      const laneSet = bpmnChildren(processEl, 'laneSet')[0];
+      if (laneSet) {
+        lanes = bpmnChildren(laneSet, 'lane');
+        lanes.forEach((lane, i) => bpmnChildren(lane, 'flowNodeRef').forEach(ref => {
+          if (ref.textContent) laneOf.set(ref.textContent.trim(), i);
+        }));
+      }
+      if (lanes.length) {
+        spec.lanes = lanes.map(lane => ({ id: lane.getAttribute('id'), name: lane.getAttribute('name') || lane.getAttribute('id') }));
+      }
+
+      const defaultFlows = new Set();
+      const nodes = [];
+      Array.from(processEl.children).forEach(child => {
+        const tag = child.localName;
+        if (FLOW_NODE_TAGS.indexOf(tag) < 0) return;
+        const id = child.getAttribute('id');
+        if (!id) return;
+        const node = { id: id, type: PREFERRED_TYPE_ALIAS[tag] || tag };
+        if (child.getAttribute('name')) node.name = child.getAttribute('name');
+        const kind = eventKind(child);
+        if (kind) node.event = kind;
+        if (tag === 'boundaryEvent') {
+          if (child.getAttribute('attachedToRef')) node.attachedTo = child.getAttribute('attachedToRef');
+          if (child.getAttribute('cancelActivity') === 'false') node.interrupting = false;
+        }
+        if (lanes.length && laneOf.has(id)) node.lane = lanes[laneOf.get(id)].getAttribute('id');
+        if (child.getAttribute('default')) defaultFlows.add(child.getAttribute('default'));
+        nodes.push(node);
+      });
+      spec.nodes = nodes;
+
+      spec.flows = bpmnChildren(processEl, 'sequenceFlow').map(flowEl => {
+        const flow = { from: flowEl.getAttribute('sourceRef'), to: flowEl.getAttribute('targetRef') };
+        if (flowEl.getAttribute('name')) flow.label = flowEl.getAttribute('name');
+        const condition = bpmnChildren(flowEl, 'conditionExpression')[0];
+        if (condition && condition.textContent) flow.condition = condition.textContent.trim();
+        if (defaultFlows.has(flowEl.getAttribute('id'))) {
+          flow.default = true;
+          delete flow.condition;
+        }
+        return flow;
+      });
+      return { spec: spec, warnings: warnings };
+    }
+
+    // Texto do arquivo exportado: o mesmo de `bpmn_tool.py extract` (UTF-8, indentado, sem escapar acentos).
+    function specToJson(spec) {
+      return JSON.stringify(spec, null, 2) + '\n';
+    }
+
+    return {
+      SpecError: SpecError, ExtractError: ExtractError,
+      FLOW_NODE_TAGS: FLOW_NODE_TAGS, SIZES: SIZES, DEFAULT_SIZE: DEFAULT_SIZE,
+      COL_SPACING: COL_SPACING, ROW_SPACING: ROW_SPACING, BASE_X: BASE_X, BASE_Y: BASE_Y,
+      LANE_SLOTS: LANE_SLOTS, LANE_PADDING: LANE_PADDING, BACK_EDGE_DROP: BACK_EDGE_DROP,
+      computeLayout: computeLayout, buildModel: buildModel, specToXml: specToXml,
+      extractSpecFromXml: extractSpecFromXml, specToJson: specToJson, pascalCase: pascalCase
+    };
+  })();
+
+  // ---------------------------------------------------------------------
+  // "Organizar automaticamente" como UM comando do commandStack: o plano
+  // (posicoes novas de formas, raias, rotas e rotulos) ja vem pronto; aqui so
+  // se aplica e se guarda o estado anterior. Escrever direto nas formas (e no
+  // DI) evita os comportamentos do bpmn-js que reagem a "mover" (reatribuir
+  // raia, reencaixar anexos, rotear de novo): o grafo e as raias nao mudam.
+  // Desfazer devolve tudo de uma vez.
+  // ---------------------------------------------------------------------
+  function AutoLayoutHandler(bpmnFactory, elementRegistry, graphicsFactory) {
+    this._bpmnFactory = bpmnFactory;
+    this._registry = elementRegistry;
+    this._graphicsFactory = graphicsFactory;
+  }
+  AutoLayoutHandler.$inject = ['bpmnFactory', 'elementRegistry', 'graphicsFactory'];
+
+  function setBox(shape, box) {
+    shape.x = box.x;
+    shape.y = box.y;
+    shape.width = box.width;
+    shape.height = box.height;
+    const bounds = shape.di && shape.di.bounds;
+    if (bounds) {
+      bounds.x = box.x;
+      bounds.y = box.y;
+      bounds.width = box.width;
+      bounds.height = box.height;
+    }
+  }
+
+  AutoLayoutHandler.prototype.execute = function (context) {
+    const factory = this._bpmnFactory;
+    const plan = context.plan;
+    const undo = { boxes: [], routes: [], labels: [] };
+    const dirty = [];
+
+    plan.boxes.forEach(entry => {
+      const el = entry.element;
+      undo.boxes.push({ element: el, box: { x: el.x, y: el.y, width: el.width, height: el.height } });
+      setBox(el, entry);
+      dirty.push(el);
+    });
+
+    plan.routes.forEach(entry => {
+      const el = entry.element;
+      const di = el.di;
+      undo.routes.push({ element: el, waypoints: el.waypoints, diWaypoints: di ? di.waypoint : undefined });
+      el.waypoints = entry.waypoints.map(p => ({ x: p.x, y: p.y }));
+      if (di && typeof di.set === 'function') di.set('waypoint', factory.createDiWaypoints(entry.waypoints));
+      dirty.push(el);
+    });
+
+    // Os rotulos externos voltam para a posicao padrao, junto do elemento. Marcados como
+    // alterados, o proprio bpmn-js grava o bounds deles no DI (BpmnUpdater, em 'shape.changed').
+    plan.labels.forEach(entry => {
+      const el = entry.element;
+      const diLabel = el.di ? el.di.label : undefined;
+      const diBounds = diLabel ? diLabel.bounds : undefined;
+      undo.labels.push({
+        element: el, x: el.x, y: el.y, diLabel: diLabel, diBounds: diBounds,
+        diBox: diBounds ? { x: diBounds.x, y: diBounds.y, width: diBounds.width, height: diBounds.height } : null
+      });
+      el.x = entry.x;
+      el.y = entry.y;
+      dirty.push(el);
+    });
+
+    context.undo = undo;
+    return dirty;
+  };
+
+  AutoLayoutHandler.prototype.revert = function (context) {
+    const undo = context.undo;
+    const dirty = [];
+    undo.boxes.forEach(entry => {
+      setBox(entry.element, entry.box);
+      dirty.push(entry.element);
+    });
+    undo.routes.forEach(entry => {
+      entry.element.waypoints = entry.waypoints;
+      const di = entry.element.di;
+      if (di && typeof di.set === 'function') di.set('waypoint', entry.diWaypoints);
+      dirty.push(entry.element);
+    });
+    // Os rotulos NAO entram na lista de alterados: isso faria o bpmn-js regravar o bounds deles no
+    // DI (como na ida). O DI volta exatamente ao que era e so o desenho e atualizado aqui.
+    undo.labels.forEach(entry => {
+      const el = entry.element;
+      el.x = entry.x;
+      el.y = entry.y;
+      const di = el.di;
+      if (di && typeof di.set === 'function') {
+        di.set('label', entry.diLabel);
+        if (entry.diLabel) {
+          if (entry.diBox) Object.assign(entry.diBounds, entry.diBox);
+          entry.diLabel.set('bounds', entry.diBounds);
+        }
+      }
+      const gfx = this._registry.getGraphics(el);
+      if (gfx) this._graphicsFactory.update('shape', el, gfx);
+    });
+    return dirty;
+  };
+
+  function AutoLayoutRegistration(commandStack) {
+    commandStack.registerHandler('editor.autoLayout', AutoLayoutHandler);
+  }
+  AutoLayoutRegistration.$inject = ['commandStack'];
+  const AutoLayoutModule = {
+    __init__: ['autoLayoutRegistration'],
+    autoLayoutRegistration: ['type', AutoLayoutRegistration]
+  };
+
   let DEFAULT_DIAGRAM_NAME = "";
   let DEFAULT_DIAGRAM_XML = null;
 
@@ -1985,6 +3009,7 @@
         CustomResizeModule,
         FontStyleModule,
         MultiCommandModule,
+        AutoLayoutModule,
         TranslateModule
       ]
     });
@@ -2092,6 +3117,7 @@
           : PROP_HINT_DEFAULT;
       }
       propBody.classList.toggle('hidden', !isRealElement);
+      renderReviewSection();
       // Sem seleção: propriedades do processo (F2.12).
       propProcess.hidden = !!(selection && selection.length) || !processBusinessObject();
       if (!propProcess.hidden) populateProcessFields();
@@ -3489,6 +4515,7 @@
         applyAllElementFontStyles();
         try { modeler.get('commandStack').clear(); } catch (e) {}
         setFileState(name, handle, false);
+        onReviewDiagramLoaded(name);
         updateUndoRedoState();
         applyOpeningZoom();
         updateZoomIndicator();
@@ -4227,6 +5254,793 @@
         showError('Falha ao exportar PNG: ' + err.message);
       }
     }
+
+
+    // =====================================================================
+    // F3.6 Organizar automaticamente: o plano vem de SkillPort.computeLayout (o
+    // mesmo codigo do import do spec) e entra no historico como UM comando.
+    // =====================================================================
+    const DEFAULT_LABEL_HEIGHT = 20;     // como o bpmn-js posiciona rotulos externos
+    const ELEMENT_LABEL_DISTANCE = 10;
+
+    function isExpandedContainer(element) {
+      return !!element && ((element.di && element.di.isExpanded === true)
+        || (element.children || []).some(child => !child.labelTarget));
+    }
+
+    // Meio do trecho central da rota, com a folga que o bpmn-js da ao rotulo do fluxo.
+    function waypointsMid(points) {
+      const mid = points.length / 2 - 1;
+      const first = points[Math.floor(mid)];
+      const second = points[Math.ceil(mid + 0.01)];
+      let x = first.x + (second.x - first.x) / 2;
+      let y = first.y + (second.y - first.y) / 2;
+      const angle = Math.atan((second.y - first.y) / (second.x - first.x));
+      if (Math.abs(angle) < Math.PI / 2) y -= ELEMENT_LABEL_DISTANCE;
+      else x += ELEMENT_LABEL_DISTANCE;
+      return { x: x, y: y };
+    }
+
+    // O que estiver dentro de um subprocesso expandido acompanha o container.
+    function shiftDescendants(container, dx, dy, plan) {
+      (container.children || []).forEach(child => {
+        if (child.labelTarget) return;
+        if (child.waypoints) {
+          const route = { element: child, waypoints: child.waypoints.map(p => ({ x: p.x + dx, y: p.y + dy })) };
+          plan.routes.push(route);
+          plan.routeOf.set(child.id, route);
+        } else {
+          const box = { element: child, x: child.x + dx, y: child.y + dy, width: child.width, height: child.height };
+          plan.boxes.push(box);
+          plan.boxOf.set(child.id, box);
+          shiftDescendants(child, dx, dy, plan);
+        }
+      });
+    }
+
+    // status: 'ok' (com boxes/routes/labels), 'empty' (nada a organizar) ou 'unsupported'.
+    function buildAutoLayoutPlan() {
+      const registry = modeler.get('elementRegistry');
+      const root = modeler.get('canvas').getRootElement();
+      const process = root && root.businessObject;
+      if (!process || process.$type !== 'bpmn:Process') return { status: 'unsupported', reason: 'pools' };
+
+      const nodes = [];
+      const flows = [];
+      (process.flowElements || []).forEach(el => {
+        if (!el.id) return;
+        if (el.$type === 'bpmn:SequenceFlow') {
+          const src = refId(el.sourceRef);
+          const tgt = refId(el.targetRef);
+          if (src && tgt) flows.push({ id: el.id, src: src, tgt: tgt });
+          return;
+        }
+        const tag = tagOf(el);
+        if (SkillPort.FLOW_NODE_TAGS.indexOf(tag) < 0) return;
+        const entry = { id: el.id, tag: tag };
+        const shape = registry.get(el.id);
+        if (shape && isExpandedContainer(shape)) entry.size = [shape.width, shape.height];
+        nodes.push(entry);
+      });
+      if (!nodes.length) return { status: 'empty' };
+
+      let lanes = null;
+      const laneSet = (process.laneSets || [])[0];
+      if (laneSet) {
+        const laneList = laneSet.lanes || [];
+        if (laneList.some(lane => lane.childLaneSet)) return { status: 'unsupported', reason: 'nested-lanes' };
+        lanes = laneList.map(lane => ({ id: lane.id, refs: (lane.flowNodeRef || []).map(ref => ref.id).filter(Boolean) }));
+      }
+
+      const layout = SkillPort.computeLayout({ nodes: nodes, flows: flows, lanes: lanes });
+      const plan = { status: 'ok', boxes: [], routes: [], labels: [], boxOf: new Map(), routeOf: new Map() };
+      layout.lanes.forEach(lane => {
+        const el = registry.get(lane.id);
+        if (el) plan.boxes.push({ element: el, x: lane.x, y: lane.y, width: lane.width, height: lane.height });
+      });
+      layout.shapes.forEach(shape => {
+        const el = registry.get(shape.id);
+        if (!el) return;
+        const box = { element: el, x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+        plan.boxes.push(box);
+        plan.boxOf.set(el.id, box);
+        if (isExpandedContainer(el)) shiftDescendants(el, shape.x - el.x, shape.y - el.y, plan);
+      });
+      layout.edges.forEach(edge => {
+        const el = registry.get(edge.id);
+        if (!el) return;
+        const route = { element: el, waypoints: edge.waypoints };
+        plan.routes.push(route);
+        plan.routeOf.set(el.id, route);
+      });
+      // Rotulos externos voltam para a posicao padrao, junto do elemento ja movido.
+      registry.forEach(el => {
+        if (!el.labelTarget) return;
+        const target = el.labelTarget;
+        const route = plan.routeOf.get(target.id);
+        const box = plan.boxOf.get(target.id);
+        const mid = route ? waypointsMid(route.waypoints)
+          : (box ? { x: box.x + box.width / 2, y: box.y + box.height + DEFAULT_LABEL_HEIGHT / 2 } : null);
+        if (!mid) return;
+        // Como o import do bpmn-js: caixa padrao de 90x20 centrada em `mid`; o texto so define a largura/altura.
+        plan.labels.push({ element: el, x: Math.round(mid.x - el.width / 2), y: Math.round(mid.y - DEFAULT_LABEL_HEIGHT / 2) });
+      });
+      return plan;
+    }
+
+    function runAutoLayout() {
+      if (!modeler) return { status: 'unavailable' };
+      endTypingSession();
+      flushPendingFields();
+      let plan;
+      try {
+        plan = buildAutoLayoutPlan();
+      } catch (err) {
+        showError('Falha ao organizar o diagrama: ' + err.message);
+        return { status: 'error' };
+      }
+      if (plan.status === 'unsupported') {
+        showToast(plan.reason === 'pools'
+          ? 'Organizar automaticamente ainda não funciona em diagramas com pools (colaboração).'
+          : 'Organizar automaticamente ainda não funciona com raias aninhadas.');
+        return plan;
+      }
+      if (plan.status === 'empty') {
+        showToast('Não há elementos para organizar.');
+        return plan;
+      }
+      try {
+        modeler.get('commandStack').execute('editor.autoLayout', { plan: plan });
+      } catch (err) {
+        showError('Falha ao organizar o diagrama: ' + err.message);
+        return { status: 'error' };
+      }
+      zoomFit();
+      updateZoomIndicator();
+      showToast('Diagrama organizado automaticamente. Ctrl+Z desfaz.');
+      return { status: 'ok', moved: plan.boxes.length };
+    }
+
+    // =====================================================================
+    // Arquivos: salvar texto (seletor do navegador ou download) e ler texto.
+    // =====================================================================
+    async function saveTextFile(text, fileName, mime, pickerTypes, startIn) {
+      if (window.showSaveFilePicker) {
+        try {
+          const options = { suggestedName: fileName, types: pickerTypes };
+          if (startIn) options.startIn = startIn;
+          const handle = await window.showSaveFilePicker(options);
+          const writable = await handle.createWritable();
+          await writable.write(text);
+          await writable.close();
+          return { handle: handle, mode: 'picker', name: handle.name };
+        } catch (err) {
+          if (err && err.name === 'AbortError') return null;
+        }
+      }
+      const blob = new Blob([text], { type: mime + ';charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return { handle: null, mode: 'download', name: fileName };
+    }
+
+    function diagramBaseName() {
+      return String(currentFileName || 'diagrama').replace(/\.(bpmn|xml)$/i, '');
+    }
+
+    // =====================================================================
+    // F3.5 Exportar e importar o spec JSON (formato de references/process-spec.md)
+    // =====================================================================
+    const specInput = document.getElementById('spec-input');
+    const JSON_PICKER_TYPE = { description: 'Arquivo JSON', accept: { 'application/json': ['.json'] } };
+
+    async function buildSpecExport() {
+      const saved = await modeler.saveXML({ format: true });
+      const extracted = SkillPort.extractSpecFromXml(saved.xml);
+      return {
+        spec: extracted.spec,
+        warnings: extracted.warnings,
+        text: SkillPort.specToJson(extracted.spec),
+        fileName: diagramBaseName() + '-spec.json'
+      };
+    }
+
+    async function exportSpec() {
+      try {
+        flushPendingFields();
+        const out = await buildSpecExport();
+        if (out.warnings.length) showNotice('spec-export-warning', out.warnings.join(' '));
+        else hideNotice('spec-export-warning');
+        const saved = await saveTextFile(out.text, out.fileName, 'application/json', [JSON_PICKER_TYPE], currentFileHandle);
+        if (saved) showToast("Spec '" + saved.name + "' exportado (" + out.spec.nodes.length + ' nós).');
+        return out;
+      } catch (err) {
+        showError('Falha ao exportar o spec: ' + err.message);
+        return null;
+      }
+    }
+
+    function showSpecProblem(message) {
+      showNotice('spec-problem', message, []);
+    }
+
+    function importedDiagramName(spec, fileName) {
+      let base = fileName ? String(fileName).replace(/\.json$/i, '').replace(/-spec$/i, '') : '';
+      if (!base) {
+        const raw = spec && (spec.id || spec.name);
+        base = raw ? String(raw).replace(/^Process_/, '') : 'diagrama';
+      }
+      return base.replace(/[\\\/:*?"<>|]/g, '_') + '.bpmn';
+    }
+
+    // Valida o spec, gera o BPMN com layout e abre como diagrama novo. Spec invalido
+    // mostra a mensagem em pt-BR e NAO mexe no diagrama atual.
+    async function importSpecText(text, fileName) {
+      let spec;
+      try {
+        spec = JSON.parse(String(text).replace(/^﻿/, ''));
+      } catch (err) {
+        showSpecProblem('O arquivo não é um JSON válido: ' + err.message);
+        return { ok: false, code: 'json-invalid' };
+      }
+      let xml;
+      try {
+        xml = SkillPort.specToXml(spec);
+      } catch (err) {
+        if (err instanceof SkillPort.SpecError) {
+          showSpecProblem('Spec inválido: ' + err.message);
+          return { ok: false, code: err.code, message: err.message };
+        }
+        showSpecProblem('Não foi possível gerar o diagrama a partir do spec: ' + err.message);
+        return { ok: false, code: 'build-failed' };
+      }
+      if (new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('parsererror').length) {
+        showSpecProblem('Spec inválido: algum texto tem caracteres que não cabem num XML.');
+        return { ok: false, code: 'invalid-xml' };
+      }
+      if (!confirmDiscardIfDirty('Você possui alterações não salvas. Deseja descartá-las para importar o spec?')) {
+        return { ok: false, code: 'cancelled' };
+      }
+      hideNotice('spec-problem');
+      const name = importedDiagramName(spec, fileName);
+      await loadDiagram(xml, name, null);
+      if (errorBanner.style.display === 'block') {
+        // O bpmn-js recusou o documento: o loadXML já mostrou o erro; nada a marcar como novo.
+        return { ok: false, code: 'load-failed' };
+      }
+      // Diagrama novo, ainda sem arquivo: conta como "não salvo".
+      setFileState(name, null, true);
+      scheduleDraftSave();
+      return { ok: true, name: name };
+    }
+
+    async function openSpecFile() {
+      if (window.showOpenFilePicker) {
+        try {
+          const options = { types: [JSON_PICKER_TYPE], multiple: false };
+          if (currentFileHandle) options.startIn = currentFileHandle;
+          const picked = await window.showOpenFilePicker(options);
+          const file = await picked[0].getFile();
+          await importSpecText(await file.text(), file.name);
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') showError('Falha ao abrir o spec: ' + (err && err.message));
+        }
+        return;
+      }
+      specInput.value = '';
+      specInput.click();
+    }
+
+    specInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      await importSpecText(await file.text(), file.name);
+    });
+
+    // =====================================================================
+    // F3.7 Comentarios de revisao: ficam em <nome>.review.json, ao lado do .bpmn.
+    // Nada disso passa pelo commandStack nem pelo XML: comentar nao "suja" o
+    // diagrama. Os nao salvos tem rascunho proprio no localStorage e aviso proprio ao fechar.
+    // =====================================================================
+    const REVIEW_FILE_VERSION = 1;
+    const reviewSection = document.getElementById('review-section');
+    const reviewTitle = document.getElementById('review-title');
+    const reviewList = document.getElementById('review-list');
+    const reviewAuthorInput = document.getElementById('review-author');
+    const reviewTextInput = document.getElementById('review-text');
+    const reviewAddButton = document.getElementById('review-add');
+    const reviewSummary = document.getElementById('review-summary');
+    const reviewOpenCount = document.getElementById('rv-open');
+    const reviewOrphanCount = document.getElementById('rv-orphans');
+    const reviewOrphans = document.getElementById('review-orphans');
+    const reviewOrphansList = document.getElementById('review-orphans-list');
+    const commentsInput = document.getElementById('comments-input');
+
+    let reviewComments = [];
+    let reviewDiagramName = null;
+    let reviewDirty = false;
+    let reviewFileHandle = null;
+    let reviewSeq = 0;
+
+    function reviewDraftKey(name) {
+      return 'bpmn-editor-review:' + window.location.pathname + '::' + name;
+    }
+
+    function newCommentId() {
+      reviewSeq += 1;
+      return 'c' + Date.now().toString(36) + '-' + reviewSeq;
+    }
+
+    // Aceita qualquer lista "do mundo externo" (arquivo, rascunho): o que nao serve e contado, nao some em silencio.
+    function sanitizeComments(raw) {
+      const list = [];
+      const ids = new Set();
+      let dropped = 0;
+      (Array.isArray(raw) ? raw : []).forEach(item => {
+        const elementId = item && typeof item.elementId === 'string' ? item.elementId : '';
+        const text = item && typeof item.text === 'string' ? item.text : '';
+        if (!elementId || !text.trim()) {
+          dropped += 1;
+          return;
+        }
+        let id = typeof item.id === 'string' && item.id ? item.id : newCommentId();
+        while (ids.has(id)) id = newCommentId();
+        ids.add(id);
+        list.push({
+          id: id,
+          elementId: elementId,
+          text: text,
+          author: typeof item.author === 'string' ? item.author : '',
+          createdAt: typeof item.createdAt === 'string' && item.createdAt ? item.createdAt : new Date().toISOString(),
+          resolved: item.resolved === true
+        });
+      });
+      return { list: list, dropped: dropped };
+    }
+
+    function readReviewDraft(name) {
+      try {
+        const raw = window.localStorage.getItem(reviewDraftKey(name));
+        const data = raw ? JSON.parse(raw) : null;
+        return data && Array.isArray(data.comments) ? sanitizeComments(data.comments).list : null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function writeReviewDraft() {
+      if (!reviewDiagramName) return;
+      try {
+        window.localStorage.setItem(reviewDraftKey(reviewDiagramName), JSON.stringify({
+          version: REVIEW_FILE_VERSION, diagram: reviewDiagramName, comments: reviewComments
+        }));
+      } catch (e) {}
+    }
+
+    function clearReviewDraft() {
+      if (!reviewDiagramName) return;
+      try {
+        window.localStorage.removeItem(reviewDraftKey(reviewDiagramName));
+      } catch (e) {}
+    }
+
+    // Aviso próprio ao fechar (separado do aviso do diagrama): só enquanto houver comentário não salvo.
+    function reviewBeforeUnloadHandler(e) {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    }
+
+    function setReviewDirty(flag) {
+      reviewDirty = flag;
+      if (flag) window.addEventListener('beforeunload', reviewBeforeUnloadHandler);
+      else window.removeEventListener('beforeunload', reviewBeforeUnloadHandler);
+    }
+
+    function reviewElementExists(id) {
+      try {
+        return !!modeler.get('elementRegistry').get(id);
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function reviewElementName(id) {
+      try {
+        const element = modeler.get('elementRegistry').get(id);
+        const name = element && element.businessObject && element.businessObject.name;
+        return name ? name : id;
+      } catch (e) {
+        return id;
+      }
+    }
+
+    function reviewCounts() {
+      const counts = { open: 0, orphans: 0, byElement: {} };
+      reviewComments.forEach(comment => {
+        if (!reviewElementExists(comment.elementId)) {
+          counts.orphans += 1;
+          return;
+        }
+        if (comment.resolved) return;
+        counts.open += 1;
+        counts.byElement[comment.elementId] = (counts.byElement[comment.elementId] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function reviewShortText(text) {
+      const flat = String(text).replace(/\s+/g, ' ').trim();
+      return flat.length > 40 ? flat.slice(0, 40) + '…' : flat;
+    }
+
+    function formatReviewDate(iso) {
+      const date = new Date(iso);
+      return isNaN(date.getTime()) ? String(iso) : date.toLocaleString('pt-BR');
+    }
+
+    function reviewItem(comment, orphan) {
+      const item = document.createElement('li');
+      item.className = 'review-item';
+      item.setAttribute('data-comment-id', comment.id);
+      item.setAttribute('data-resolved', comment.resolved ? 'true' : 'false');
+      const meta = document.createElement('div');
+      meta.className = 'review-meta';
+      const who = document.createElement('strong');
+      who.textContent = comment.author || 'Sem autor';
+      meta.appendChild(who);
+      meta.appendChild(document.createTextNode(' · ' + formatReviewDate(comment.createdAt)));
+      if (orphan) {
+        const where = document.createElement('span');
+        where.className = 'review-orphan-ref';
+        where.textContent = ' · elemento ausente: ' + comment.elementId;
+        meta.appendChild(where);
+      }
+      if (comment.resolved) {
+        const state = document.createElement('span');
+        state.className = 'review-state';
+        state.textContent = 'Resolvido';
+        meta.appendChild(state);
+      }
+      const body = document.createElement('p');
+      body.className = 'review-text';
+      body.textContent = comment.text;
+      const actions = document.createElement('div');
+      actions.className = 'review-actions';
+      const short = reviewShortText(comment.text);
+      const resolve = document.createElement('button');
+      resolve.type = 'button';
+      resolve.setAttribute('data-review-action', 'toggle');
+      resolve.textContent = comment.resolved ? 'Reabrir' : 'Resolver';
+      resolve.setAttribute('aria-label', (comment.resolved ? 'Reabrir' : 'Resolver') + ' o comentário: ' + short);
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.setAttribute('data-review-action', 'delete');
+      remove.textContent = 'Excluir';
+      remove.setAttribute('aria-label', 'Excluir o comentário: ' + short);
+      actions.appendChild(resolve);
+      actions.appendChild(remove);
+      item.appendChild(meta);
+      item.appendChild(body);
+      item.appendChild(actions);
+      return item;
+    }
+
+    function reviewTargetElement() {
+      const element = currentPropertyElement();
+      return element && element.type !== 'bpmn:Process' && !element.labelTarget ? element : null;
+    }
+
+    function renderReviewSection() {
+      if (!reviewSection) return;
+      const element = reviewTargetElement();
+      reviewList.innerHTML = '';
+      if (!element) return;
+      const own = reviewComments.filter(comment => comment.elementId === element.id);
+      const open = own.filter(comment => !comment.resolved).length;
+      reviewTitle.textContent = 'Comentários de revisão (' + open + (open === 1 ? ' aberto' : ' abertos') + ' de ' + own.length + ')';
+      if (!own.length) {
+        const empty = document.createElement('li');
+        empty.className = 'review-empty';
+        empty.textContent = 'Nenhum comentário neste elemento.';
+        reviewList.appendChild(empty);
+      }
+      own.forEach(comment => reviewList.appendChild(reviewItem(comment, false)));
+    }
+
+    function renderReviewOrphans() {
+      const orphans = reviewComments.filter(comment => !reviewElementExists(comment.elementId));
+      reviewOrphans.hidden = orphans.length === 0;
+      reviewOrphansList.innerHTML = '';
+      orphans.forEach(comment => reviewOrphansList.appendChild(reviewItem(comment, true)));
+    }
+
+    function renderReviewSummary(counts) {
+      reviewOpenCount.textContent = String(counts.open);
+      reviewOrphanCount.textContent = String(counts.orphans);
+      reviewSummary.setAttribute('data-state', counts.open || counts.orphans ? 'pending' : 'none');
+      reviewSummary.setAttribute('aria-label', 'Comentários de revisão: ' + counts.open + ' abertos, '
+        + counts.orphans + ' órfãos. Ir para os comentários');
+    }
+
+    // Selo no canvas (overlay HTML, fora do SVG): só nos elementos com comentário aberto.
+    function renderReviewBadges(counts) {
+      let overlays;
+      let registry;
+      try {
+        overlays = modeler.get('overlays');
+        registry = modeler.get('elementRegistry');
+        overlays.remove({ type: 'review' });
+      } catch (e) {
+        return;
+      }
+      Object.keys(counts.byElement).forEach(id => {
+        const element = registry.get(id);
+        if (!element) return;
+        const total = counts.byElement[id];
+        const badge = document.createElement('span');
+        badge.className = 'rev-badge';
+        badge.setAttribute('role', 'img');
+        const description = total + (total === 1 ? ' comentário de revisão aberto' : ' comentários de revisão abertos')
+          + ' em ' + reviewElementName(id);
+        badge.setAttribute('aria-label', description);
+        badge.title = description;
+        badge.textContent = '💬 ' + total;
+        try {
+          overlays.add(element, 'review', { position: { top: -12, right: 12 }, html: badge, scale: false });
+        } catch (e) {}
+      });
+    }
+
+    function refreshReviewUi() {
+      if (!modeler || !reviewSection) return;
+      const counts = reviewCounts();
+      renderReviewSection();
+      renderReviewOrphans();
+      renderReviewSummary(counts);
+      renderReviewBadges(counts);
+    }
+
+    function reviewChanged() {
+      setReviewDirty(true);
+      writeReviewDraft();
+      refreshReviewUi();
+    }
+
+    function addReviewComment(elementId, text, author) {
+      const clean = String(text || '').trim();
+      if (!elementId || !clean) return null;
+      const comment = {
+        id: newCommentId(), elementId: elementId, text: clean, author: String(author || '').trim(),
+        createdAt: new Date().toISOString(), resolved: false
+      };
+      reviewComments.push(comment);
+      reviewChanged();
+      return comment;
+    }
+
+    function setReviewResolved(id, resolved) {
+      const comment = reviewComments.find(c => c.id === id);
+      if (!comment) return;
+      comment.resolved = !!resolved;
+      reviewChanged();
+    }
+
+    function deleteReviewComment(id) {
+      const before = reviewComments.length;
+      reviewComments = reviewComments.filter(c => c.id !== id);
+      if (reviewComments.length !== before) reviewChanged();
+    }
+
+    // O diagrama aberto muda: cada um tem a sua lista (o rascunho do anterior já está guardado).
+    function onReviewDiagramLoaded(name) {
+      if (reviewDiagramName !== name) {
+        reviewDiagramName = name;
+        reviewFileHandle = null;
+        // Um rascunho vazio (comentários todos excluídos, sem salvar) não tem o que avisar ao fechar.
+        const draft = readReviewDraft(name);
+        const pending = !!draft && draft.length > 0;
+        if (draft && !pending) clearReviewDraft();
+        reviewComments = pending ? draft : [];
+        setReviewDirty(pending);
+      }
+      refreshReviewUi();
+    }
+
+    function reviewFileText() {
+      return JSON.stringify({
+        version: REVIEW_FILE_VERSION,
+        diagram: currentFileName,
+        comments: reviewComments.map(c => ({
+          id: c.id, elementId: c.elementId, text: c.text, author: c.author,
+          createdAt: c.createdAt, resolved: c.resolved
+        }))
+      }, null, 2) + '\n';
+    }
+
+    async function saveReviewFile() {
+      try {
+        const fileName = diagramBaseName() + '.review.json';
+        const text = reviewFileText();
+        let saved = null;
+        if (reviewFileHandle && reviewFileHandle.createWritable) {
+          try {
+            const writable = await reviewFileHandle.createWritable();
+            await writable.write(text);
+            await writable.close();
+            saved = { name: reviewFileHandle.name };
+          } catch (e) {
+            reviewFileHandle = null;
+          }
+        }
+        if (!saved) {
+          saved = await saveTextFile(text, fileName, 'application/json', [JSON_PICKER_TYPE], currentFileHandle);
+          if (!saved) return null;
+          reviewFileHandle = saved.handle;
+        }
+        setReviewDirty(false);
+        clearReviewDraft();
+        showToast("Comentários salvos em '" + saved.name + "' (" + reviewComments.length + ').');
+        return { text: text, name: saved.name };
+      } catch (err) {
+        showError('Falha ao salvar os comentários: ' + err.message);
+        return null;
+      }
+    }
+
+    function loadReviewText(text, fileName, handle) {
+      let data;
+      try {
+        data = JSON.parse(String(text).replace(/^﻿/, ''));
+      } catch (err) {
+        showNotice('review-problem', 'O arquivo de comentários não é um JSON válido: ' + err.message, []);
+        return { ok: false, code: 'json-invalid' };
+      }
+      if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.comments)
+          || typeof data.version !== 'number') {
+        showNotice('review-problem', "Este arquivo não parece de comentários de revisão: faltam 'version' e a lista 'comments'.", []);
+        return { ok: false, code: 'not-review-file' };
+      }
+      if (data.version > REVIEW_FILE_VERSION) {
+        showNotice('review-problem', 'Este arquivo de comentários é de uma versão mais nova (' + data.version
+          + ') que este editor entende (' + REVIEW_FILE_VERSION + ').', []);
+        return { ok: false, code: 'newer-version' };
+      }
+      if (reviewDirty && reviewComments.length
+          && !confirm('Há comentários não salvos. Abrir o arquivo substitui os comentários atuais. Continuar?')) {
+        return { ok: false, code: 'cancelled' };
+      }
+      hideNotice('review-problem');
+      const clean = sanitizeComments(data.comments);
+      reviewComments = clean.list;
+      reviewFileHandle = handle || null;
+      setReviewDirty(false);
+      clearReviewDraft();
+      refreshReviewUi();
+      const counts = reviewCounts();
+      const notes = [];
+      if (clean.dropped) notes.push(clean.dropped + ' item(ns) inválido(s) ignorado(s)');
+      if (counts.orphans) notes.push(counts.orphans + ' órfão(s)');
+      if (typeof data.diagram === 'string' && data.diagram && data.diagram !== currentFileName) {
+        notes.push("o arquivo é do diagrama '" + data.diagram + "'");
+      }
+      showToast('Comentários abertos: ' + reviewComments.length + (notes.length ? ' (' + notes.join('; ') + ')' : '') + '.');
+      return { ok: true, count: reviewComments.length, orphans: counts.orphans, dropped: clean.dropped };
+    }
+
+    async function openReviewFile() {
+      if (window.showOpenFilePicker) {
+        try {
+          const options = { types: [JSON_PICKER_TYPE], multiple: false };
+          if (currentFileHandle) options.startIn = currentFileHandle;
+          const picked = await window.showOpenFilePicker(options);
+          const file = await picked[0].getFile();
+          loadReviewText(await file.text(), file.name, picked[0]);
+        } catch (err) {
+          if (!err || err.name !== 'AbortError') showError('Falha ao abrir os comentários: ' + (err && err.message));
+        }
+        return;
+      }
+      commentsInput.value = '';
+      commentsInput.click();
+    }
+
+    commentsInput.addEventListener('change', async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      loadReviewText(await file.text(), file.name, null);
+    });
+
+    function rememberReviewAuthor(author) {
+      try {
+        window.localStorage.setItem('bpmn-editor-review-author', author);
+      } catch (e) {}
+    }
+
+    try {
+      reviewAuthorInput.value = window.localStorage.getItem('bpmn-editor-review-author') || '';
+    } catch (e) {}
+
+    function submitReviewComment() {
+      const element = reviewTargetElement();
+      if (!element) return;
+      if (!reviewTextInput.value.trim()) {
+        showToast('Escreva o comentário antes de adicionar.');
+        reviewTextInput.focus();
+        return;
+      }
+      rememberReviewAuthor(reviewAuthorInput.value.trim());
+      addReviewComment(element.id, reviewTextInput.value, reviewAuthorInput.value);
+      reviewTextInput.value = '';
+      reviewTextInput.focus();
+    }
+
+    reviewAddButton.addEventListener('click', submitReviewComment);
+    reviewTextInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        submitReviewComment();
+      }
+    });
+
+    function onReviewListClick(event) {
+      const button = event.target.closest('[data-review-action]');
+      const item = event.target.closest('[data-comment-id]');
+      if (!button || !item) return;
+      const id = item.getAttribute('data-comment-id');
+      if (button.getAttribute('data-review-action') === 'delete') {
+        deleteReviewComment(id);
+      } else {
+        const comment = reviewComments.find(c => c.id === id);
+        if (comment) setReviewResolved(id, !comment.resolved);
+      }
+    }
+    reviewList.addEventListener('click', onReviewListClick);
+    reviewOrphansList.addEventListener('click', onReviewListClick);
+
+    // O contador do rodapé leva ao primeiro lugar com comentário aberto (ou à lista de órfãos).
+    reviewSummary.addEventListener('click', () => {
+      const counts = reviewCounts();
+      const firstOpen = reviewComments.find(c => !c.resolved && counts.byElement[c.elementId]);
+      const firstId = firstOpen ? firstOpen.elementId : null;
+      if (firstId) {
+        if (propertiesPanel.classList.contains('hidden')) {
+          propertiesPanel.classList.remove('hidden');
+          btnPropsToggle.setAttribute('aria-pressed', 'true');
+        }
+        modeler.get('selection').select(modeler.get('elementRegistry').get(firstId));
+        reviewSection.scrollIntoView({ block: 'nearest' });
+        reviewTextInput.focus();
+      } else if (counts.orphans) {
+        reviewOrphans.scrollIntoView({ block: 'nearest' });
+        const first = reviewOrphansList.querySelector('button');
+        if (first) first.focus();
+      } else {
+        showToast('Nenhum comentário aberto.');
+      }
+    });
+
+    modeler.on('commandStack.changed', refreshReviewUi);
+
+    // ---- ligacao dos controles do menu --------------------------------------
+    document.getElementById('btn-auto-layout').addEventListener('click', runAutoLayout);
+    document.getElementById('btn-import-spec').addEventListener('click', openSpecFile);
+    document.getElementById('btn-export-spec').addEventListener('click', exportSpec);
+    document.getElementById('btn-save-comments').addEventListener('click', saveReviewFile);
+    document.getElementById('btn-open-comments').addEventListener('click', openReviewFile);
+
+    // Funções `async` declaradas dentro de um bloco não viram globais sozinhas: estas
+    // são as entradas programáticas (os testes e o console as chamam por aqui).
+    Object.assign(window, {
+      importSpecText: importSpecText, exportSpec: exportSpec, buildSpecExport: buildSpecExport,
+      saveReviewFile: saveReviewFile, openReviewFile: openReviewFile, openSpecFile: openSpecFile
+    });
 
     // Eventos da Toolbar
     document.getElementById('btn-open').addEventListener('click', openFile);

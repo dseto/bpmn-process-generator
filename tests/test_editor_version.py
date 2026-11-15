@@ -57,6 +57,27 @@ def test_the_editor_version_was_bumped_for_the_live_validation_round():
     assert (major, minor) >= (1, 4)
 
 
+def test_the_editor_version_was_bumped_for_the_skill_integration_round():
+    """Fase 3B (spec import/export, auto-layout, review comments) is 1.5.0 or later."""
+    major, minor, _patch = (int(part) for part in generate_editor_html.EDITOR_VERSION.split("."))
+    assert (major, minor) >= (1, 5)
+    assert editor_version_of(EDITOR.read_text(encoding="utf-8")) == generate_editor_html.EDITOR_VERSION
+
+
+def test_a_project_copy_from_the_live_validation_round_is_refreshed_to_the_integration_round(project):
+    """An untouched 1.4.0 copy (before Fase 3B) is upgraded, as the versioning rule promises."""
+    directory, diagram = project
+    html = EDITOR.read_text(encoding="utf-8")
+    older = html.replace(f'name="bpmn-editor-version" content="{generate_editor_html.EDITOR_VERSION}"',
+                         'name="bpmn-editor-version" content="1.4.0"')
+    assert editor_version_of(older) == "1.4.0"
+    from bpmn_tool import _stamp_hash
+
+    (directory / "editor.html").write_text(_stamp_hash(older), encoding="utf-8")
+    copied = copy_editor_if_needed(directory, diagram)
+    assert editor_version_of(copied.read_text(encoding="utf-8")) == generate_editor_html.EDITOR_VERSION
+
+
 def test_the_committed_editor_carries_the_version_meta_tag():
     html = EDITOR.read_text(encoding="utf-8")
     assert EDITOR_VERSION_META in html

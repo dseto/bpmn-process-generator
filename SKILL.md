@@ -152,6 +152,8 @@ python scripts/bpmn_build.py <caminho>/<processo>-spec.json -o <caminho>/<proces
   * **Grade**: encaixe magnético na grade de 10 px.
   * **Paleta de Cores**, **Histórico** (`Ctrl+Z` / `Ctrl+Y`) e **Busca** (`Ctrl+F`).
   * **Exportação Gráfica**: SVG e PNG 2x com a tipografia intacta, e **🖨️ PDF** (abre a impressão do navegador com folha de estilo dedicada — escolha "Salvar como PDF").
+  * **Integração com a skill**: menu Arquivo → **Importar spec JSON** (mesmas validações do `SpecError`, abre com layout) e **Exportar spec JSON** (`<nome>-spec.json`, como `bpmn_tool.py extract`); menu Editar → **Organizar automaticamente** (layout do `bpmn_tool.py layout`, um passo desfazível).
+  * **Comentários de revisão**: por elemento, salvos em `<nome>.review.json` ao lado do diagrama (o `.bpmn` não muda).
 * **Modo offline (opcional)**: por padrão o editor carrega o bpmn-js do CDN. Colocando os arquivos da biblioteca em `assets/vendor/` e rodando `python scripts/generate_editor_html.py`, tudo passa a ser embutido no `editor.html` e ele abre sem internet — instruções em `assets/vendor/README.md`. O editor gerado declara em qual modo foi construído (`<meta name="bpmn-editor-assets">`).
 * **Atualização da cópia do projeto**: o editor entregue carrega versão; quando a skill evolui, uma cópia intacta é atualizada sozinha, e uma cópia com ajustes locais é preservada (o comando avisa como sobrescrever com `--force`).
 * Ajustes manuais são gravados diretamente no disco com **`Ctrl+S`**.
